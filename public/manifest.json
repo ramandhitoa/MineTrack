@@ -1,0 +1,12 @@
+{
+  "name":"MineTrack Nickel - QC & Operational Reporting",
+  "short_name":"MineTrack",
+  "description":"Sistem manajemen QC dan pelaporan operasional tambang nikel",
+  "start_url":"/",
+  "scope":"/",
+  "display":"standalone",
+  "background_color":"#080d1a",
+  "theme_color":"#10b981",
+  "orientation":"any",
+  "icons":[]
+}
