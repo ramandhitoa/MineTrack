@@ -111,7 +111,7 @@ export const emptyAttendance = {
   date: new Date().toISOString().slice(0, 10),
   shift: 'Shift 1',
   location: attendanceLocations[0],
-  selectedNames: [],
+  name: attendanceNames[0],
 };
 
 export const weekly = [];

@@ -317,20 +317,9 @@ export default function App() {
 
   const saveAttendance = async (event, form) => {
     event.preventDefault();
-    const selectedNames = Array.isArray(form.selectedNames) ? form.selectedNames : [form.name].filter(Boolean);
-    if (selectedNames.length === 0) {
-      notify('Centang minimal satu nama untuk disimpan.');
-      return;
-    }
-
-    const submittedRows = selectedNames.map((name, index) => ({
-      ...form,
-      name,
-      id: `${Date.now()}-${index}`,
-    }));
-    const nextAttendance = [...submittedRows, ...attendance];
+    const nextAttendance = [{ ...form, id: Date.now() }, ...attendance];
     setAttendance(nextAttendance);
-    await autoSyncAttendance(nextAttendance, `${selectedNames.length} data Daily Absensi berhasil disimpan dan disinkronkan.`);
+    await autoSyncAttendance(nextAttendance, 'Data Daily Absensi berhasil disimpan dan disinkronkan.');
   };
 
   // -------------------- Clipboard / CSV / Google Sheets --------------------
