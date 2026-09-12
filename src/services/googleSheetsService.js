@@ -60,7 +60,8 @@ const HEADERS = [
   'Total Tonase',
   'Assay Ni',
   'Assay Fe',
-  'MC'
+  'MC',
+  'Timestamp Pengumpulan'
 ];
 
 function doGet(e) {
@@ -74,7 +75,7 @@ function doGet(e) {
         return respond_({ success: true, items: [], values: [], count: 0 }, getCallback_(e));
       }
 
-      const values = attendanceSheet.getRange(1, 1, lastRow, 4).getDisplayValues();
+      const values = attendanceSheet.getRange(1, 1, lastRow, 5).getDisplayValues();
       const dataRows = values.slice(1).filter(row => row.some(value => String(value).trim() !== ''));
       return respond_({ success: true, items: dataRows, values: dataRows, count: dataRows.length }, getCallback_(e));
     }
@@ -132,25 +133,27 @@ function doPost(e) {
 function saveAttendance_(payload) {
   const attendanceSheet = getAttendanceSheet_();
   let data = Array.isArray(payload.values) ? payload.values : Array.isArray(payload.items) ? payload.items : [];
+  const submittedAt = getSubmissionTimestamp_();
 
   const rows = data.map(function(item) {
     if (Array.isArray(item)) {
-      return [item[0] || '', item[1] || '', item[2] || '', item[3] || ''];
+      return [item[0] || '', item[1] || '', item[2] || '', item[3] || '', submittedAt];
     }
 
     return [
       item.date || item.tanggal || '',
       item.shift || '',
       item.location || item.lokasi || item.lokasiKerja || '',
-      item.name || item.nama || ''
+      item.name || item.nama || '',
+      submittedAt
     ];
   });
 
   attendanceSheet.clearContents();
-  attendanceSheet.getRange(1, 1, 1, 4).setValues([['Tanggal', 'Shift', 'Lokasi Kerja', 'Nama']]);
+  attendanceSheet.getRange(1, 1, 1, 5).setValues([['Tanggal', 'Shift', 'Lokasi Kerja', 'Nama', 'Timestamp Pengumpulan']]);
 
   if (rows.length > 0) {
-    attendanceSheet.getRange(2, 1, rows.length, 4).setValues(rows);
+    attendanceSheet.getRange(2, 1, rows.length, 5).setValues(rows);
   }
 
   return respond_({ success: true, message: 'Data Daily Absensi berhasil disimpan.', sheet: ATTENDANCE_SHEET_NAME, count: rows.length }, '');
@@ -159,6 +162,7 @@ function saveAttendance_(payload) {
 function saveProduction_(payload) {
   const sheet = getSheet_();
   let items = Array.isArray(payload.items) ? payload.items : Array.isArray(payload.values) ? payload.values : [];
+  const submittedAt = getSubmissionTimestamp_();
 
   sheet.clearContents();
   sheet.getRange(1, 1, 1, HEADERS.length).setValues([HEADERS]);
@@ -166,11 +170,12 @@ function saveProduction_(payload) {
   if (items.length > 0) {
     const rows = items.map(function(item) {
       if (Array.isArray(item)) {
-        const row = item.slice(0, HEADERS.length);
-        while (row.length < HEADERS.length) row.push('');
+        const row = item.slice(0, HEADERS.length - 1);
+        while (row.length < HEADERS.length - 1) row.push('');
+        row.push(submittedAt);
         return row;
       }
-      return itemToRow_(item);
+      return itemToRow_(item, submittedAt);
     });
 
     sheet.getRange(2, 1, rows.length, HEADERS.length).setValues(rows);
@@ -209,7 +214,7 @@ function looksLikeHeader_(row) {
   return first === 'tanggal' || first === 'date' || second === 'shift';
 }
 
-function itemToRow_(item) {
+function itemToRow_(item, submittedAt) {
   const ritToday = Number(item.ritToday) || 0;
   const ritTotal = Number(item.ritTotal) || 0;
   const ritPrevious = Number(item.ritPrevious) || Math.max(0, ritTotal - ritToday);
@@ -235,8 +240,13 @@ function itemToRow_(item) {
     Number(item.totalTonnage) || Number(item.tonnage) || 0,
     Number(item.niGrade) || 0,
     Number(item.feGrade) || 0,
-    Number(item.mc) || 0
+    Number(item.mc) || 0,
+    submittedAt
   ];
+}
+
+function getSubmissionTimestamp_() {
+  return Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm');
 }
 
 function rowToItem_(row) {
