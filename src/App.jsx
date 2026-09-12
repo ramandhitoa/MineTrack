@@ -449,8 +449,8 @@ export default function App() {
           />
         )}
 
-        {activeTab === 'mingguan' && <Weekly />}
-        {activeTab === 'bulanan' && <Monthly />}
+        {activeTab === 'mingguan' && <Weekly logs={logs} />}
+        {activeTab === 'bulanan' && <Monthly logs={logs} />}
 
         {activeTab === 'absensi' && (
           <DailyAttendance
