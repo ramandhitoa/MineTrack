@@ -18,6 +18,15 @@ export default function DailyAttendance({ attendance, onSaveAttendance, onSyncAt
     setForm({ ...emptyAttendance, date: form.date });
   };
 
+  const selectedNames = form.selectedNames || [];
+
+  const toggleName = (name, checked) => {
+    const nextNames = checked
+      ? [...selectedNames, name]
+      : selectedNames.filter((selectedName) => selectedName !== name);
+    update('selectedNames', nextNames);
+  };
+
   return (
     <section className="pageStack">
       <section className="panel attendanceDashboard">
@@ -56,12 +65,22 @@ export default function DailyAttendance({ attendance, onSaveAttendance, onSyncAt
               {attendanceLocations.map((location) => <option key={location}>{location}</option>)}
             </select>
           </label>
-          <label>
-            Nama
-            <select value={form.name} onChange={(event) => update('name', event.target.value)}>
-              {attendanceNames.map((name) => <option key={name}>{name}</option>)}
-            </select>
-          </label>
+          <div className="field">
+            <span>Nama Personel (bisa pilih lebih dari satu)</span>
+            <div className="checks attendanceNameChecks">
+              {attendanceNames.map((name) => (
+                <label key={name}>
+                  <input
+                    type="checkbox"
+                    checked={selectedNames.includes(name)}
+                    onChange={(event) => toggleName(name, event.target.checked)}
+                  />
+                  {name}
+                </label>
+              ))}
+            </div>
+            <small>{selectedNames.length} nama dipilih</small>
+          </div>
           <button className="primary" type="submit">Simpan Absensi</button>
         </form>
 
