@@ -16,7 +16,7 @@ const HEADERS = [
   'Block Model', 'Sample', 'Hole', 'Elevasi', 'Loading',
   'Material', 'Sublot', 'Start Time', 'Stop Time',
   'Rit Today', 'Tonase', 'Total Rit', 'Total Tonase',
-  'Assay Ni', 'Assay Fe', 'MC', 'Timestamp Pengumpulan'
+  'Assay Ni', 'Assay Fe', 'MC', 'Nama Pelapor', 'Timestamp Pengumpulan'
 ];
 
 function doGet(e) {
@@ -31,7 +31,7 @@ function doGet(e) {
         return respond_({ success: true, items: [], values: [], count: 0 }, getCallback_(e));
       }
 
-      const values = attendanceSheet.getRange(1, 1, lastRow, 5).getDisplayValues();
+      const values = attendanceSheet.getRange(1, 1, lastRow, 6).getDisplayValues();
       const dataRows = values.slice(1).filter(row => row.some(value => String(value).trim() !== ''));
       return respond_({ success: true, items: dataRows, values: dataRows, count: dataRows.length }, getCallback_(e));
     }
@@ -92,35 +92,35 @@ function saveAttendance_(payload) {
   const submittedAt = getSubmissionTimestamp_();
 
   const lastRow = attendanceSheet.getLastRow();
-  const existingRows = lastRow > 1 ? attendanceSheet.getRange(2, 1, lastRow - 1, 5).getDisplayValues() : [];
-  const knownKeys = new Set(existingRows.map(function(row) { return attendanceKey_(row[0], row[1], row[2], row[3]); }));
+  const existingRows = lastRow > 1 ? attendanceSheet.getRange(2, 1, lastRow - 1, 6).getDisplayValues() : [];
+  const knownKeys = new Set(existingRows.map(function(row) { return attendanceKey_(row[0], row[1], row[2], row[3], row[4]); }));
   const rows = [];
 
   data.forEach(function(item) {
     let row;
     if (Array.isArray(item)) {
-      row = [item[0] || '', item[1] || '', item[2] || '', item[3] || '', submittedAt];
+      row = [item[0] || '', item[1] || '', item[2] || '', item[3] || '', item[4] || '', submittedAt];
     } else {
-      row = [item.date || item.tanggal || '', item.shift || '', item.location || item.lokasi || item.lokasiKerja || '', item.name || item.nama || '', submittedAt];
+      row = [item.date || item.tanggal || '', item.shift || '', item.location || item.lokasi || item.lokasiKerja || '', item.name || item.nama || '', item.reporterName || item.reporter || '', submittedAt];
     }
-    const key = attendanceKey_(row[0], row[1], row[2], row[3]);
+    const key = attendanceKey_(row[0], row[1], row[2], row[3], row[4]);
     if (!knownKeys.has(key)) {
       knownKeys.add(key);
       rows.push(row);
     }
   });
 
-  attendanceSheet.getRange(1, 1, 1, 5).setValues([['Tanggal', 'Shift', 'Lokasi Kerja', 'Nama', 'Timestamp Pengumpulan']]);
+  attendanceSheet.getRange(1, 1, 1, 6).setValues([['Tanggal', 'Shift', 'Lokasi Kerja', 'Nama', 'Nama Pelapor', 'Timestamp Pengumpulan']]);
 
   if (rows.length > 0) {
-    attendanceSheet.getRange(attendanceSheet.getLastRow() + 1, 1, rows.length, 5).setValues(rows);
+    attendanceSheet.getRange(attendanceSheet.getLastRow() + 1, 1, rows.length, 6).setValues(rows);
   }
 
   return respond_({ success: true, message: 'Data Daily Absensi berhasil disimpan.', sheet: ATTENDANCE_SHEET_NAME, count: rows.length }, '');
 }
 
-function attendanceKey_(date, shift, location, name) {
-  return [date, shift, location, name].map(function(value) { return String(value || '').trim().toLowerCase(); }).join('|');
+function attendanceKey_(date, shift, location, name, reporter) {
+  return [date, shift, location, name, reporter].map(function(value) { return String(value || '').trim().toLowerCase(); }).join('|');
 }
 
 function saveProduction_(payload) {
@@ -136,7 +136,7 @@ function saveProduction_(payload) {
       if (Array.isArray(item)) {
         const row = item.slice(0, HEADERS.length - 1);
         while (row.length < HEADERS.length - 1) row.push('');
-        row.push(submittedAt);
+        row.push(item.length >= HEADERS.length ? item[HEADERS.length - 1] || submittedAt : submittedAt);
         return row;
       }
       return itemToRow_(item, submittedAt);
@@ -204,7 +204,8 @@ function itemToRow_(item, submittedAt) {
     Number(item.niGrade) || 0,
     Number(item.feGrade) || 0,
     Number(item.mc) || 0,
-    submittedAt
+    item.reporterName || item.reporter || '',
+    item.submissionTimestamp || submittedAt
   ];
 }
 
@@ -241,7 +242,8 @@ function rowToItem_(row) {
     niGrade: Number(row[18]) || 0,
     feGrade: Number(row[19]) || 0,
     mc: Number(row[20]) || 0,
-    submissionTimestamp: String(row[21] || '').trim()
+    reporterName: String(row[21] || '').trim(),
+    submissionTimestamp: String(row[22] || '').trim()
   };
 }
 

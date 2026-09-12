@@ -57,7 +57,7 @@ export default function Excel({ gsUrl, onSync, onReload, onCopy, onExport, onOpe
 
           <div>
             <h3><Copy /> Salin Format Tab (TSV)</h3>
-            <p>Menyiapkan 22 kolom lengkap ke clipboard, termasuk timestamp pengumpulan.</p>
+            <p>Menyiapkan 23 kolom lengkap ke clipboard, termasuk nama pelapor dan timestamp.</p>
             <button className="amber" onClick={onCopy}>Salin Tabel</button>
           </div>
 

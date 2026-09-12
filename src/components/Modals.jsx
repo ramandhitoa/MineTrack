@@ -16,6 +16,9 @@ export function DailyModal({ data, setData, onClose, onSave }) {
         <fieldset>
           <legend>1. Tanggal, Shift & Pit Location</legend>
           <div className="formGrid3">
+            <Field label="Nama Pelapor">
+              <input value={data.reporterName} onChange={(e) => update('reporterName', e.target.value)} placeholder="Nama pengirim laporan" required />
+            </Field>
             <Field label="Tanggal">
               <input type="date" value={data.date} onChange={(e) => update('date', e.target.value)} required />
             </Field>
