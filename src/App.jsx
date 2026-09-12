@@ -301,12 +301,6 @@ export default function App() {
     await autoSyncProduction(nextLogs, 'Laporan produksi berhasil disimpan dan disinkronkan.');
   };
 
-  const deleteLog = async (id) => {
-    const nextLogs = logs.filter((log) => log.id !== id);
-    setLogs(nextLogs);
-    await autoSyncProduction(nextLogs, 'Data laporan berhasil dihapus dan disinkronkan.');
-  };
-
   // -------------------- Pending job CRUD --------------------
   const savePending = (event) => {
     event.preventDefault();
@@ -445,7 +439,6 @@ export default function App() {
             setQuery={setQuery}
             onOpenModal={() => setDailyOpen(true)}
             onCopyExcel={handleCopyExcel}
-            onDelete={deleteLog}
           />
         )}
 

@@ -1,6 +1,6 @@
 // ============================================================
 // HALAMAN PROGRES HARIAN
-// Berisi filter, pencarian, tabel laporan, dan aksi hapus/input.
+// Berisi filter, pencarian, tabel laporan, dan aksi input.
 // ============================================================
 
 import { Copy, Plus, Table2 } from 'lucide-react';
@@ -16,7 +16,6 @@ export default function Daily({
   setQuery,
   onOpenModal,
   onCopyExcel,
-  onDelete,
 }) {
   return (
     <section className="pageStack">
@@ -75,7 +74,7 @@ export default function Daily({
             </button>
           </div>
         </div>
-        <LogTable logs={filteredLogs} onDelete={onDelete} />
+        <LogTable logs={filteredLogs} />
       </div>
     </section>
   );
