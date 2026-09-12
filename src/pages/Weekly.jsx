@@ -5,8 +5,29 @@
 
 import { fmt } from '../utils/formatters';
 
+const parseDate = (date) => {
+  const text = String(date || '').trim();
+  if (!text) return null;
+
+  const isoDate = text.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (isoDate) {
+    const value = new Date(Date.UTC(Number(isoDate[1]), Number(isoDate[2]) - 1, Number(isoDate[3])));
+    return Number.isNaN(value.getTime()) ? null : value;
+  }
+
+  const slashDate = text.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})/);
+  if (slashDate) {
+    const value = new Date(Date.UTC(Number(slashDate[3]), Number(slashDate[2]) - 1, Number(slashDate[1])));
+    return Number.isNaN(value.getTime()) ? null : value;
+  }
+
+  const value = new Date(text);
+  return Number.isNaN(value.getTime()) ? null : value;
+};
+
 const getWeekStart = (date) => {
-  const value = new Date(`${date}T00:00:00`);
+  const value = parseDate(date);
+  if (!value) return null;
   const day = value.getDay();
   value.setDate(value.getDate() + (day === 0 ? -6 : 1 - day));
   return value;
@@ -19,6 +40,7 @@ const groupByWeekAndPit = (logs) => {
   logs.forEach((log) => {
     if (!log.date || !log.pit) return;
     const weekStart = getWeekStart(log.date);
+    if (!weekStart) return;
     const weekKey = formatDate(weekStart);
     const key = `${weekKey}|${log.pit}`;
     const group = groups.get(key) || { weekKey, weekStart, pit: log.pit, rit: 0, tonnage: 0, ni: 0, mc: 0, count: 0 };
