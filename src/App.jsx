@@ -225,8 +225,43 @@ export default function App() {
     return Object.entries(summary).map(([name, value]) => ({ name, value }));
   }, [logs]);
 
+  const autoSyncProduction = async (nextLogs, message) => {
+    if (!gsUrl) return;
+
+    setGsLoading(true);
+    setGsStatus('Menyinkronkan laporan produksi...');
+    try {
+      await syncLogsToGoogleSheets(gsUrl, nextLogs);
+      setGsRemoteCount(nextLogs.length);
+      setGsStatus(`Terhubung • ${nextLogs.length} baris`);
+      notify(message);
+    } catch (error) {
+      setGsStatus(`Gagal • ${error.message}`);
+      notify(`Data tersimpan di perangkat, tetapi gagal sinkron ke Google Sheets: ${error.message}`);
+    } finally {
+      setGsLoading(false);
+    }
+  };
+
+  const autoSyncAttendance = async (nextAttendance, message) => {
+    if (!gsUrl) return;
+
+    setGsLoading(true);
+    setGsStatus('Menyinkronkan Daily Absensi...');
+    try {
+      await syncAttendanceToGoogleSheets(gsUrl, nextAttendance);
+      setGsStatus(`Absensi tersinkronisasi • ${nextAttendance.length} baris`);
+      notify(message);
+    } catch (error) {
+      setGsStatus(`Gagal • ${error.message}`);
+      notify(`Absensi tersimpan di perangkat, tetapi gagal sinkron ke Google Sheets: ${error.message}`);
+    } finally {
+      setGsLoading(false);
+    }
+  };
+
   // -------------------- Daily log CRUD --------------------
-  const saveDaily = (event) => {
+  const saveDaily = async (event) => {
     event.preventDefault();
 
     const ritPrevious = Number(dailyForm.ritPrevious) || 0;
@@ -245,15 +280,17 @@ export default function App() {
       mc: Number(dailyForm.mc) || 0,
     };
 
-    setLogs((current) => [newLog, ...current]);
+    const nextLogs = [newLog, ...logs];
+    setLogs(nextLogs);
     setDailyForm({ ...emptyDaily, date: new Date().toISOString().slice(0, 10) });
     setDailyOpen(false);
-    notify('Laporan hasil kerja shift berhasil ditambahkan.');
+    await autoSyncProduction(nextLogs, 'Laporan produksi berhasil disimpan dan disinkronkan.');
   };
 
-  const deleteLog = (id) => {
-    setLogs((current) => current.filter((log) => log.id !== id));
-    notify('Data laporan berhasil dihapus.');
+  const deleteLog = async (id) => {
+    const nextLogs = logs.filter((log) => log.id !== id);
+    setLogs(nextLogs);
+    await autoSyncProduction(nextLogs, 'Data laporan berhasil dihapus dan disinkronkan.');
   };
 
   // -------------------- Pending job CRUD --------------------
@@ -270,20 +307,22 @@ export default function App() {
     notify('Planning job pending berhasil disimpan ke backlog.');
   };
 
-  const saveAttendance = (event, form) => {
+  const saveAttendance = async (event, form) => {
     event.preventDefault();
-    setAttendance((current) => [{ ...form, id: Date.now() }, ...current]);
-    notify('Data Daily Absensi berhasil disimpan.');
+    const nextAttendance = [{ ...form, id: Date.now() }, ...attendance];
+    setAttendance(nextAttendance);
+    await autoSyncAttendance(nextAttendance, 'Data Daily Absensi berhasil disimpan dan disinkronkan.');
   };
 
-  const deleteAttendance = (id) => {
-    setAttendance((current) => current.filter((item) => item.id !== id));
-    notify('Data absensi berhasil dihapus.');
+  const deleteAttendance = async (id) => {
+    const nextAttendance = attendance.filter((item) => item.id !== id);
+    setAttendance(nextAttendance);
+    await autoSyncAttendance(nextAttendance, 'Data absensi berhasil dihapus dan disinkronkan.');
   };
 
-  const clearAttendance = () => {
+  const clearAttendance = async () => {
     setAttendance([]);
-    notify('Seluruh data Daily Absensi berhasil dibersihkan.');
+    await autoSyncAttendance([], 'Seluruh data Daily Absensi berhasil dibersihkan dan disinkronkan.');
   };
 
   // -------------------- Clipboard / CSV / Google Sheets --------------------
