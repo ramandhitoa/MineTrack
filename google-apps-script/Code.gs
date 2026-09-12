@@ -91,28 +91,36 @@ function saveAttendance_(payload) {
   let data = Array.isArray(payload.values) ? payload.values : Array.isArray(payload.items) ? payload.items : [];
   const submittedAt = getSubmissionTimestamp_();
 
-  const rows = data.map(function(item) {
-    if (Array.isArray(item)) {
-      return [item[0] || '', item[1] || '', item[2] || '', item[3] || '', submittedAt];
-    }
+  const lastRow = attendanceSheet.getLastRow();
+  const existingRows = lastRow > 1 ? attendanceSheet.getRange(2, 1, lastRow - 1, 5).getDisplayValues() : [];
+  const knownKeys = new Set(existingRows.map(function(row) { return attendanceKey_(row[0], row[1], row[2], row[3]); }));
+  const rows = [];
 
-    return [
-      item.date || item.tanggal || '',
-      item.shift || '',
-      item.location || item.lokasi || item.lokasiKerja || '',
-      item.name || item.nama || '',
-      submittedAt
-    ];
+  data.forEach(function(item) {
+    let row;
+    if (Array.isArray(item)) {
+      row = [item[0] || '', item[1] || '', item[2] || '', item[3] || '', submittedAt];
+    } else {
+      row = [item.date || item.tanggal || '', item.shift || '', item.location || item.lokasi || item.lokasiKerja || '', item.name || item.nama || '', submittedAt];
+    }
+    const key = attendanceKey_(row[0], row[1], row[2], row[3]);
+    if (!knownKeys.has(key)) {
+      knownKeys.add(key);
+      rows.push(row);
+    }
   });
 
-  attendanceSheet.clearContents();
   attendanceSheet.getRange(1, 1, 1, 5).setValues([['Tanggal', 'Shift', 'Lokasi Kerja', 'Nama', 'Timestamp Pengumpulan']]);
 
   if (rows.length > 0) {
-    attendanceSheet.getRange(2, 1, rows.length, 5).setValues(rows);
+    attendanceSheet.getRange(attendanceSheet.getLastRow() + 1, 1, rows.length, 5).setValues(rows);
   }
 
   return respond_({ success: true, message: 'Data Daily Absensi berhasil disimpan.', sheet: ATTENDANCE_SHEET_NAME, count: rows.length }, '');
+}
+
+function attendanceKey_(date, shift, location, name) {
+  return [date, shift, location, name].map(function(value) { return String(value || '').trim().toLowerCase(); }).join('|');
 }
 
 function saveProduction_(payload) {

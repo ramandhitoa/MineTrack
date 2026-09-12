@@ -135,28 +135,36 @@ function saveAttendance_(payload) {
   let data = Array.isArray(payload.values) ? payload.values : Array.isArray(payload.items) ? payload.items : [];
   const submittedAt = getSubmissionTimestamp_();
 
-  const rows = data.map(function(item) {
-    if (Array.isArray(item)) {
-      return [item[0] || '', item[1] || '', item[2] || '', item[3] || '', submittedAt];
-    }
+  const lastRow = attendanceSheet.getLastRow();
+  const existingRows = lastRow > 1 ? attendanceSheet.getRange(2, 1, lastRow - 1, 5).getDisplayValues() : [];
+  const knownKeys = new Set(existingRows.map(function(row) { return attendanceKey_(row[0], row[1], row[2], row[3]); }));
+  const rows = [];
 
-    return [
-      item.date || item.tanggal || '',
-      item.shift || '',
-      item.location || item.lokasi || item.lokasiKerja || '',
-      item.name || item.nama || '',
-      submittedAt
-    ];
+  data.forEach(function(item) {
+    let row;
+    if (Array.isArray(item)) {
+      row = [item[0] || '', item[1] || '', item[2] || '', item[3] || '', submittedAt];
+    } else {
+      row = [item.date || item.tanggal || '', item.shift || '', item.location || item.lokasi || item.lokasiKerja || '', item.name || item.nama || '', submittedAt];
+    }
+    const key = attendanceKey_(row[0], row[1], row[2], row[3]);
+    if (!knownKeys.has(key)) {
+      knownKeys.add(key);
+      rows.push(row);
+    }
   });
 
-  attendanceSheet.clearContents();
   attendanceSheet.getRange(1, 1, 1, 5).setValues([['Tanggal', 'Shift', 'Lokasi Kerja', 'Nama', 'Timestamp Pengumpulan']]);
 
   if (rows.length > 0) {
-    attendanceSheet.getRange(2, 1, rows.length, 5).setValues(rows);
+    attendanceSheet.getRange(attendanceSheet.getLastRow() + 1, 1, rows.length, 5).setValues(rows);
   }
 
   return respond_({ success: true, message: 'Data Daily Absensi berhasil disimpan.', sheet: ATTENDANCE_SHEET_NAME, count: rows.length }, '');
+}
+
+function attendanceKey_(date, shift, location, name) {
+  return [date, shift, location, name].map(function(value) { return String(value || '').trim().toLowerCase(); }).join('|');
 }
 
 function saveProduction_(payload) {
@@ -333,6 +341,52 @@ export async function syncAttendanceToGoogleSheets(url, attendance) {
     mode: 'no-cors',
     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
     body: JSON.stringify({ type: 'attendance', items: attendance, values: attendance }),
+  });
+}
+
+export function readAttendanceFromGoogleSheets(url) {
+  const endpoint = normalizeUrl_(url);
+  if (!endpoint) return Promise.reject(new Error('URL Google Apps Script belum diisi.'));
+
+  return new Promise((resolve, reject) => {
+    const callbackName = '__gradeControlAttendance_' + Date.now() + '_' + Math.random().toString(36).slice(2);
+    const script = document.createElement('script');
+    const timer = window.setTimeout(() => {
+      cleanup();
+      reject(new Error('Timeout saat membaca Daily Absensi dari Google Sheets.'));
+    }, 15000);
+
+    window[callbackName] = (payload) => {
+      cleanup();
+      if (!payload || payload.success === false) {
+        reject(new Error(payload?.message || 'Google Sheets mengembalikan error absensi.'));
+        return;
+      }
+      const rows = Array.isArray(payload.items) ? payload.items : [];
+      resolve(rows.map((row, index) => ({
+        id: `gs-attendance-${index}-${row[4] || ''}`,
+        date: row[0] || '',
+        shift: row[1] || '',
+        location: row[2] || '',
+        name: row[3] || '',
+        submissionTimestamp: row[4] || '',
+      })));
+    };
+
+    function cleanup() {
+      window.clearTimeout(timer);
+      delete window[callbackName];
+      script.remove();
+    }
+
+    script.onerror = () => {
+      cleanup();
+      reject(new Error('Daily Absensi tidak dapat dibaca dari Google Sheets.'));
+    };
+
+    const separator = endpoint.includes('?') ? '&' : '?';
+    script.src = endpoint + separator + 'type=attendance&callback=' + encodeURIComponent(callbackName) + '&t=' + Date.now();
+    document.head.appendChild(script);
   });
 }
 

@@ -24,7 +24,7 @@ import {
 } from './data/initialData';
 import { calculateShiftHours } from './utils/formatters';
 import { copyLogsAsTSV, exportLogsAsCSV } from './services/exportService';
-import { DEFAULT_GOOGLE_APPS_SCRIPT_URL, GOOGLE_APPS_SCRIPT, GOOGLE_SPREADSHEET_ID, readLogsFromGoogleSheets, syncAttendanceToGoogleSheets, syncLogsToGoogleSheets } from './services/googleSheetsService';
+import { DEFAULT_GOOGLE_APPS_SCRIPT_URL, GOOGLE_APPS_SCRIPT, GOOGLE_SPREADSHEET_ID, readAttendanceFromGoogleSheets, readLogsFromGoogleSheets, syncAttendanceToGoogleSheets, syncLogsToGoogleSheets } from './services/googleSheetsService';
 
 const readStorage = (key, fallback) => {
   try {
@@ -153,6 +153,16 @@ export default function App() {
     return () => { cancelled = true; };
   }, [gsUrl]);
 
+  useEffect(() => {
+    let cancelled = false;
+    readAttendanceFromGoogleSheets(gsUrl)
+      .then((remoteAttendance) => {
+        if (!cancelled && remoteAttendance.length > 0) setAttendance(remoteAttendance);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [gsUrl]);
+
   const notify = (message) => {
     setAlert(message);
     window.setTimeout(() => setAlert(''), 4500);
@@ -250,6 +260,8 @@ export default function App() {
     setGsStatus('Menyinkronkan Daily Absensi...');
     try {
       await syncAttendanceToGoogleSheets(gsUrl, nextAttendance);
+      const sharedAttendance = await readAttendanceFromGoogleSheets(gsUrl);
+      if (sharedAttendance.length > 0) setAttendance(sharedAttendance);
       setGsStatus(`Absensi tersinkronisasi • ${nextAttendance.length} baris`);
       notify(message);
     } catch (error) {
@@ -312,17 +324,6 @@ export default function App() {
     const nextAttendance = [{ ...form, id: Date.now() }, ...attendance];
     setAttendance(nextAttendance);
     await autoSyncAttendance(nextAttendance, 'Data Daily Absensi berhasil disimpan dan disinkronkan.');
-  };
-
-  const deleteAttendance = async (id) => {
-    const nextAttendance = attendance.filter((item) => item.id !== id);
-    setAttendance(nextAttendance);
-    await autoSyncAttendance(nextAttendance, 'Data absensi berhasil dihapus dan disinkronkan.');
-  };
-
-  const clearAttendance = async () => {
-    setAttendance([]);
-    await autoSyncAttendance([], 'Seluruh data Daily Absensi berhasil dibersihkan dan disinkronkan.');
   };
 
   // -------------------- Clipboard / CSV / Google Sheets --------------------
@@ -453,8 +454,6 @@ export default function App() {
           <DailyAttendance
             attendance={attendance}
             onSaveAttendance={saveAttendance}
-            onDeleteAttendance={deleteAttendance}
-            onClearAttendance={clearAttendance}
             onSyncAttendance={syncAttendance}
             syncing={gsLoading}
           />

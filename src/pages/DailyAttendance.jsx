@@ -4,11 +4,11 @@
 // ============================================================
 
 import { useState } from 'react';
-import { CloudUpload, Trash2 } from 'lucide-react';
+import { CloudUpload } from 'lucide-react';
 import { attendanceLocations, attendanceNames, emptyAttendance } from '../data/initialData';
 import { dateFmt, fmt } from '../utils/formatters';
 
-export default function DailyAttendance({ attendance, onSaveAttendance, onDeleteAttendance, onClearAttendance, onSyncAttendance, syncing }) {
+export default function DailyAttendance({ attendance, onSaveAttendance, onSyncAttendance, syncing }) {
   const [form, setForm] = useState(emptyAttendance);
 
   const update = (key, value) => setForm((current) => ({ ...current, [key]: value }));
@@ -28,9 +28,6 @@ export default function DailyAttendance({ attendance, onSaveAttendance, onDelete
           </div>
           <div className="attendanceActions">
             <span className="attendanceCount">{fmt(attendance.length)} Data</span>
-            <button type="button" onClick={onClearAttendance} disabled={attendance.length === 0}>
-              <Trash2 size={14} /> Hapus Semua
-            </button>
             <button type="button" onClick={onSyncAttendance} disabled={syncing}>
               <CloudUpload size={14} /> {syncing ? 'Menyinkronkan...' : 'Sync Google Sheets'}
             </button>
@@ -72,23 +69,17 @@ export default function DailyAttendance({ attendance, onSaveAttendance, onDelete
                 <th>Shift</th>
                 <th>Lokasi Kerja</th>
                 <th>Nama</th>
-                <th>Aksi</th>
               </tr>
             </thead>
             <tbody>
               {attendance.length === 0 ? (
-                <tr><td colSpan="5" className="emptyState">Belum ada data absensi.</td></tr>
+                <tr><td colSpan="4" className="emptyState">Belum ada data absensi.</td></tr>
               ) : attendance.map((item) => (
                 <tr key={item.id}>
                   <td>{dateFmt(item.date)}</td>
                   <td><span className="pill">{item.shift}</span></td>
                   <td><b>{item.location}</b></td>
                   <td>{item.name}</td>
-                  <td>
-                    <button className="iconBtn danger" onClick={() => onDeleteAttendance(item.id)} aria-label="Hapus data absensi">
-                      <Trash2 size={15} />
-                    </button>
-                  </td>
                 </tr>
               ))}
             </tbody>
