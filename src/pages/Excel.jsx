@@ -1,12 +1,12 @@
 // ============================================================
 // HALAMAN GOOGLE SHEETS & EXCEL
-// Tempat menyimpan URL Web App, sync data, copy TSV, export CSV,
+// Tempat melihat endpoint Web App, sync data, copy TSV, export CSV,
 // dan melihat/copy Google Apps Script.
 // ============================================================
 
 import { CloudUpload, Code2, Copy, Download, ExternalLink, FileSpreadsheet, RefreshCw } from 'lucide-react';
 
-export default function Excel({ gsUrl, setGsUrl, onSaveUrl, onSync, onReload, onCopy, onExport, onOpenScript, spreadsheetId, gsLoading, gsStatus, gsRemoteCount }) {
+export default function Excel({ gsUrl, onSync, onReload, onCopy, onExport, onOpenScript, spreadsheetId, gsLoading, gsStatus, gsRemoteCount }) {
   return (
     <section>
       <div className="panel excel">
@@ -37,18 +37,12 @@ export default function Excel({ gsUrl, setGsUrl, onSaveUrl, onSync, onReload, on
           <div className="gsStatus">Status: <b>{gsStatus}</b>{gsRemoteCount !== null && <span> • Data Google Sheets: {gsRemoteCount} baris</span>}</div>
         </div>
 
-        {/* CARD URL: simpan endpoint Apps Script agar HP/PC memakai sumber data yang sama. */}
+        {/* CARD URL: endpoint resmi dikunci agar semua perangkat memakai sumber data yang sama. */}
         <div className="urlBox">
-          <label>
-            Webhook / Google Apps Script Web App URL
-            <input
-              value={gsUrl}
-              onChange={(event) => setGsUrl(event.target.value)}
-              placeholder="https://script.google.com/macros/s/.../exec"
-            />
-          </label>
+          <label>Webhook / Google Apps Script Web App URL</label>
+          <code>{gsUrl}</code>
+          <small>Endpoint resmi sudah dikunci. Semua pengguna otomatis memakai Google Spreadsheet yang sama.</small>
           <div className="urlActions">
-            <button className="primary" onClick={onSaveUrl}>Simpan & Tes Koneksi</button>
             <button className="secondary" onClick={onReload} disabled={gsLoading}><RefreshCw size={14} /> Tes / Muat Data</button>
           </div>
         </div>

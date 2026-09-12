@@ -63,7 +63,7 @@ export default function App() {
   const [logs, setLogs] = useState(clearOldProgressOnce);
   const [pending, setPending] = useState(() => readStorage(STORAGE_KEYS.pending, initialPending));
   const [attendance, setAttendance] = useState(clearOldAttendanceOnce);
-  const [gsUrl, setGsUrl] = useState(() => localStorage.getItem(STORAGE_KEYS.googleSheetsUrl) || DEFAULT_GOOGLE_APPS_SCRIPT_URL);
+  const [gsUrl] = useState(DEFAULT_GOOGLE_APPS_SCRIPT_URL);
   const [gsLoading, setGsLoading] = useState(false);
   const [gsStatus, setGsStatus] = useState('Belum terhubung');
   const [gsRemoteCount, setGsRemoteCount] = useState(null);
@@ -301,12 +301,6 @@ export default function App() {
     notify('File CSV 21 kolom berhasil dibuat.');
   };
 
-  const saveGoogleSheetsUrl = async () => {
-    localStorage.setItem(STORAGE_KEYS.googleSheetsUrl, gsUrl);
-    notify('URL Google Apps Script Web App berhasil disimpan.');
-    await loadGoogleSheets(true);
-  };
-
   // Tombol ini selalu mengambil data terbaru dari Google Sheets.
   const reloadGoogleSheets = async () => {
     await loadGoogleSheets(true);
@@ -439,8 +433,6 @@ export default function App() {
         {activeTab === 'excel' && (
           <Excel
             gsUrl={gsUrl}
-            setGsUrl={setGsUrl}
-            onSaveUrl={saveGoogleSheetsUrl}
             onSync={syncGoogleSheets}
             onReload={reloadGoogleSheets}
             onCopy={handleCopyExcel}

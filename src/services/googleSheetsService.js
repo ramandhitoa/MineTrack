@@ -9,17 +9,15 @@
 //   MineTrack -> POST -> Apps Script -> Google Sheet
 //   MineTrack <- JSONP <- Apps Script <- Google Sheet
 //
-// Spreadsheet utama sudah dikunci ke ID milik pengguna.
-// Yang perlu dimasukkan pengguna hanya URL Web App /exec.
+// Spreadsheet dan endpoint Web App sudah dikunci ke deployment resmi.
 // ============================================================
 
 // ID Google Spreadsheet pengguna.
 export const GOOGLE_SPREADSHEET_ID = '18oh2WCDf5p6xSyE1_sDOxCSY6HtV87fpMoEfhDm9cRs';
 
-// URL Apps Script Web App. Bisa diganti dari halaman Integrasi.
-// Pastikan URL ini menunjuk ke deployment Apps Script yang sama dengan spreadsheet ID di atas.
+// URL Apps Script Web App resmi yang terhubung ke spreadsheet di atas.
 export const DEFAULT_GOOGLE_APPS_SCRIPT_URL =
-  'https://script.google.com/macros/s/AKfycbwk6-ryssNeztCxMIKXfD-wZUfIOwUi7We2CX_hWh8RpsoOqmhyNvRpeb6oJFM_VPfJ/exec';
+  'https://script.google.com/macros/s/AKfycbwbwns-V_ntd-pM9DgiILWWKrB_1Bl1aG6kwsdtVgs-zynYYFxyLTC4UqnDDV7Q1YQbLA/exec';
 
 // Nama sheet/tab yang dipakai oleh Apps Script.
 export const GOOGLE_SHEET_NAME = 'Laporan Produksi';
