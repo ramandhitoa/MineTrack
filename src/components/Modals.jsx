@@ -5,7 +5,7 @@
 // ============================================================
 
 import { Field, Modal } from './Common';
-import { equipmentOptions } from '../data/initialData';
+import { areaPitOptions, equipmentOptions } from '../data/initialData';
 
 export function DailyModal({ data, setData, onClose, onSave }) {
   const update = (key, value) => setData((current) => ({ ...current, [key]: value }));
@@ -30,16 +30,7 @@ export function DailyModal({ data, setData, onClose, onSave }) {
             </Field>
             <Field label="Area Pit">
               <select value={data.pit} onChange={(e) => update('pit', e.target.value)}>
-                <option>Pit BETA</option>
-                <option>Pit Rantepao Barat</option>
-                <option>Rantepao Timur</option>
-                <option>Rantapao Extend</option>
-                <option>Pit A1M</option>
-                <option>Pit A3M</option>
-                <option>Pit IRG</option>
-                <option>Pit AKP 6</option>
-                <option>Pit AKP 1</option>
-                <option>Alorindah</option>
+                {areaPitOptions.map((pit) => <option key={pit}>{pit}</option>)}
               </select>
             </Field>
           </div>

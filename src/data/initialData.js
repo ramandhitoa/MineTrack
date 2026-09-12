@@ -14,6 +14,19 @@ export const equipmentOptions = [
   'Tanpa Support',
 ];
 
+export const areaPitOptions = [
+  'Pit BETA',
+  'Pit Rantepao Barat',
+  'Rantepao Timur',
+  'Rantapao Extend',
+  'Pit A1M',
+  'Pit A3M',
+  'Pit IRG',
+  'Pit AKP 6',
+  'Pit AKP 1',
+  'Alorindah',
+];
+
 export const initialLogs = [];
 
 export const initialPending = [
@@ -45,7 +58,7 @@ export const emptyDaily = {
   reporterName: '',
   date: '2026-09-09',
   shift: 'Shift 1 (Siang)',
-  pit: 'Pit Alpha Block 1',
+  pit: areaPitOptions[0],
   equipment: [],
   dumpingArea: 'Stockpile Dome A',
   blockModel: '',

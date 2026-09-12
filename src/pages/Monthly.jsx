@@ -4,11 +4,12 @@
 // ============================================================
 
 import { fmt } from '../utils/formatters';
+import { areaPitOptions } from '../data/initialData';
 
 const groupByMonthAndPit = (logs) => {
   const groups = new Map();
   logs.forEach((log) => {
-    if (!log.date || !log.pit) return;
+    if (!log.date || !areaPitOptions.includes(log.pit)) return;
     const month = log.date.slice(0, 7);
     const key = `${month}|${log.pit}`;
     const group = groups.get(key) || { month, pit: log.pit, rit: 0, tonnage: 0, ni: 0, mc: 0, count: 0 };
