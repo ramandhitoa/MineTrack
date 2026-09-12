@@ -24,7 +24,7 @@ export const tabs = [
 
 export const pageTitles = {
   dashboard: 'Dashboard Hasil Kerja & QC Tambang Nikel',
-  harian: 'Progres Pekerjaan Harian (21 Kolom Excel Ready)',
+  harian: 'Progres Pekerjaan Harian (22 Kolom Excel Ready)',
   mingguan: 'Progres & Agregasi Pekerjaan Mingguan',
   bulanan: 'Rekapitulasi Kinerja Bulanan Smelter Spec',
   absensi: 'Dashboard Daily Absensi',

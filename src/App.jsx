@@ -290,7 +290,7 @@ export default function App() {
   const handleCopyExcel = async () => {
     try {
       await copyLogsAsTSV(logs);
-      notify('Seluruh 21 kolom data QC disalin ke clipboard.');
+      notify('Seluruh 22 kolom data QC disalin ke clipboard.');
     } catch {
       notify('Clipboard tidak dapat digunakan di browser ini.');
     }
@@ -298,7 +298,7 @@ export default function App() {
 
   const handleExportCSV = () => {
     exportLogsAsCSV(logs);
-    notify('File CSV 21 kolom berhasil dibuat.');
+    notify('File CSV 22 kolom berhasil dibuat.');
   };
 
   // Tombol ini selalu mengambil data terbaru dari Google Sheets.

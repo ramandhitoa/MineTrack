@@ -57,7 +57,7 @@ export default function Excel({ gsUrl, onSync, onReload, onCopy, onExport, onOpe
 
           <div>
             <h3><Copy /> Salin Format Tab (TSV)</h3>
-            <p>Menyiapkan 21 kolom lengkap ke clipboard. Buka Excel / Google Sheets lalu Ctrl + V.</p>
+            <p>Menyiapkan 22 kolom lengkap ke clipboard, termasuk timestamp pengumpulan.</p>
             <button className="amber" onClick={onCopy}>Salin Tabel</button>
           </div>
 

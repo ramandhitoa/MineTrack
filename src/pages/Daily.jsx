@@ -1,6 +1,6 @@
 // ============================================================
 // HALAMAN PROGRES HARIAN
-// Berisi filter, pencarian, tabel 21 kolom, dan aksi hapus/input.
+// Berisi filter, pencarian, tabel laporan, dan aksi hapus/input.
 // ============================================================
 
 import { Copy, Plus, Table2 } from 'lucide-react';
