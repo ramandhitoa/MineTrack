@@ -232,7 +232,8 @@ function rowToItem_(row) {
     totalTonnage: Number(row[17]) || 0,
     niGrade: Number(row[18]) || 0,
     feGrade: Number(row[19]) || 0,
-    mc: Number(row[20]) || 0
+    mc: Number(row[20]) || 0,
+    submissionTimestamp: String(row[21] || '').trim()
   };
 }
 
