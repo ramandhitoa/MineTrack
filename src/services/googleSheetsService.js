@@ -29,7 +29,7 @@ export const GOOGLE_ATTENDANCE_SHEET_NAME = 'Daily Absensi';
 // Salin script ini ke Extensions > Apps Script pada spreadsheet.
 // Script sengaja diberi komentar supaya mudah dirawat.
 export const GOOGLE_APPS_SCRIPT = `// ============================================================
-// MINETRACK PRO - GOOGLE APPS SCRIPT API
+// GRADE CONTROL AKP - GOOGLE APPS SCRIPT API
 // SESUAI TEMPLATE SHEET:
 // - Laporan Produksi
 // - Daily Absensi

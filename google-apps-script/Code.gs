@@ -1,5 +1,5 @@
 // ============================================================
-// MINETRACK PRO - GOOGLE APPS SCRIPT API
+// GRADE CONTROL AKP - GOOGLE APPS SCRIPT API
 // FIXED VERSION
 // Support:
 // 1. Data Produksi

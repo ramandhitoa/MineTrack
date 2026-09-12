@@ -71,7 +71,7 @@ function Sidebar({ activeTab, setActiveTab, mobileNav, setMobileNav, pendingCoun
             <Truck size={22} />
           </div>
           <div>
-            <b>MINETRACK PRO</b>
+            <b>GRADE CONTROL AKP</b>
             <span>QC & Nickel Mining Operations</span>
           </div>
         </div>
@@ -107,7 +107,7 @@ function Sidebar({ activeTab, setActiveTab, mobileNav, setMobileNav, pendingCoun
         </div>
       </div>
 
-      <footer>MineTrack Nickel v3.0 • QC & Spreadsheet Sync</footer>
+      <footer>Grade Control AKP v3.0 • QC & Spreadsheet Sync</footer>
     </aside>
   );
 }
