@@ -32,8 +32,15 @@ const groupByWeekAndPit = (logs) => {
   return [...groups.values()].sort((a, b) => b.weekStart - a.weekStart || a.pit.localeCompare(b.pit));
 };
 
+const groupByPit = (groups) => groups.reduce((result, item) => {
+  const area = result.find((group) => group.pit === item.pit);
+  if (area) area.weeks.push(item);
+  else result.push({ pit: item.pit, weeks: [item] });
+  return result;
+}, []);
+
 export default function Weekly({ logs = [] }) {
-  const groups = groupByWeekAndPit(logs);
+  const pitGroups = groupByPit(groupByWeekAndPit(logs));
 
   return (
     <section className="pageStack">
@@ -42,35 +49,46 @@ export default function Weekly({ logs = [] }) {
         <p>Rekap mingguan dipisahkan berdasarkan Area Pit.</p>
       </div>
 
-      <div className="cards4">
-        {groups.length === 0 ? (
-          <div className="panel emptyState">Belum ada data progres mingguan.</div>
-        ) : groups.map((item) => {
-          const avgNi = item.count ? item.ni / item.count : 0;
-          const avgMc = item.count ? item.mc / item.count : 0;
-          const weekEnd = new Date(item.weekStart);
-          weekEnd.setDate(weekEnd.getDate() + 6);
+      {pitGroups.length === 0 ? (
+        <div className="panel emptyState">
+          Belum ada data progres mingguan.
+        </div>
+      ) : pitGroups.map((pitGroup) => (
+        <section className="weeklyPitGroup" key={pitGroup.pit}>
+          <div className="weeklyPitHeader">
+            <span>AREA PIT</span>
+            <h3>{pitGroup.pit}</h3>
+            <small>{pitGroup.weeks.length} periode mingguan</small>
+          </div>
+          <div className="cards4">
+            {pitGroup.weeks.map((item) => {
+              const avgNi = item.count ? item.ni / item.count : 0;
+              const avgMc = item.count ? item.mc / item.count : 0;
+              const weekEnd = new Date(item.weekStart);
+              weekEnd.setDate(weekEnd.getDate() + 6);
 
-          return (
-            <div className="panel week" key={`${item.weekKey}-${item.pit}`}>
-              <div>
-                <b>{item.pit}</b>
-                <small>{item.weekKey} s/d {formatDate(weekEnd)}</small>
-                <hr />
+              return (
+                <div className="panel week" key={`${item.weekKey}-${item.pit}`}>
+                  <div>
+                    <b>Minggu {item.weekKey}</b>
+                    <small>{formatDate(weekEnd)}</small>
+                    <hr />
 
-                <p>Ritase Ore: <strong>{fmt(item.rit)} Rit</strong></p>
-                <p>Rata-Rata Kadar Ni: <strong>{avgNi.toFixed(2)}% Ni</strong></p>
-                <p>Rata-Rata MC: <strong>{avgMc.toFixed(2)}%</strong></p>
-                <p>Total Tonase: <strong>{fmt(item.tonnage)} MT</strong></p>
-              </div>
+                    <p>Ritase Ore: <strong>{fmt(item.rit)} Rit</strong></p>
+                    <p>Rata-Rata Kadar Ni: <strong>{avgNi.toFixed(2)}% Ni</strong></p>
+                    <p>Rata-Rata MC: <strong>{avgMc.toFixed(2)}%</strong></p>
+                    <p>Total Tonase: <strong>{fmt(item.tonnage)} MT</strong></p>
+                  </div>
 
-              <span className="status">
-                {avgNi >= 1.6 ? 'On Spec Target' : 'Need Blending'}
-              </span>
-            </div>
-          );
-        })}
-      </div>
+                  <span className="status">
+                    {avgNi >= 1.6 ? 'On Spec Target' : 'Need Blending'}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      ))}
     </section>
   );
 }
