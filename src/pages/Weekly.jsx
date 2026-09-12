@@ -4,6 +4,7 @@
 // ============================================================
 
 import { fmt } from '../utils/formatters';
+import { areaPitOptions } from '../data/initialData';
 
 const parseDate = (date) => {
   const text = String(date || '').trim();
@@ -38,7 +39,7 @@ const formatDate = (date) => date.toISOString().slice(0, 10);
 const groupByWeekAndPit = (logs) => {
   const groups = new Map();
   logs.forEach((log) => {
-    if (!log.date || !log.pit) return;
+    if (!log.date || !areaPitOptions.includes(log.pit)) return;
     const weekStart = getWeekStart(log.date);
     if (!weekStart) return;
     const weekKey = formatDate(weekStart);
