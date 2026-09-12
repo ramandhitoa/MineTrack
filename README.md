@@ -6,7 +6,7 @@ Versi ini menggunakan **versi 3 sebagai dasar data dan tampilan**, lalu ditambah
 
 Spreadsheet ID sudah dikunci di:
 
-`1uPBK4LI1QXJlxU0zjmXjynruzrUu7JSJwq-t8691F3Q`
+`18oh2WCDf5p6xSyE1_sDOxCSY6HtV87fpMoEfhDm9cRs`
 
 Jadi pengguna **tidak perlu mengganti Spreadsheet ID** di source code.
 
@@ -26,6 +26,8 @@ Yang perlu diisi hanya URL **Google Apps Script Web App** yang berakhiran `/exec
 10. Copy URL Web App yang berakhiran `/exec`.
 11. Masukkan URL tersebut di halaman **Google Sheets & Excel**.
 12. Klik **Simpan URL**, lalu **Sync Data Sekarang**.
+
+> Jika muncul `SyntaxError: Unexpected token 'export'`, file Apps Script berisi file frontend yang salah. Hapus seluruh isi `Kode.gs`, lalu salin hanya isi file `google-apps-script/Code.gs` atau script yang ditampilkan tombol **Buka Script** di MineTrack. Jangan menyalin isi `src/services/googleSheetsService.js`, karena file tersebut menggunakan `export` dan hanya dijalankan oleh frontend Vite.
 
 Google Apps Script mendukung akses spreadsheet melalui `SpreadsheetApp.openById()`/`openByUrl()`, dan web app memakai fungsi endpoint seperti `doGet`/`doPost`.
 
@@ -86,7 +88,7 @@ Jangan memasukkan URL `docs.google.com/spreadsheets/.../edit`. URL tersebut adal
 
 
 ## Perbaikan versi ini
-- Spreadsheet ID frontend diperbarui ke Spreadsheet aktif: `1uPBK4LI1QXJlxU0zjmXjynruzrUu7JSJwq-t8691F3Q`.
+- Spreadsheet ID frontend diperbarui ke Spreadsheet aktif: `18oh2WCDf5p6xSyE1_sDOxCSY6HtV87fpMoEfhDm9cRs`.
 - Default Web App URL sudah diisi dengan deployment Apps Script yang digunakan MineTrack.
 - Apps Script membaca Google Sheet memakai `getDisplayValues()` agar nilai `Sublot` seperti `3-2` tidak berubah menjadi tanggal dan jam `7:00`/`17:00` tidak bergeser karena timezone.
 - Mapping 21 kolom A:U dipertahankan.
