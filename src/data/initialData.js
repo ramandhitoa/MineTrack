@@ -107,7 +107,6 @@ export const attendanceNames = [
 ];
 
 export const emptyAttendance = {
-  reporterName: '',
   date: new Date().toISOString().slice(0, 10),
   shift: 'Shift 1',
   location: attendanceLocations[0],

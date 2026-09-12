@@ -76,8 +76,10 @@ function doGet(e) {
         return respond_({ success: true, items: [], values: [], count: 0 }, getCallback_(e));
       }
 
-      const values = attendanceSheet.getRange(1, 1, lastRow, 6).getDisplayValues();
-      const dataRows = values.slice(1).filter(row => row.some(value => String(value).trim() !== ''));
+      const values = attendanceSheet.getRange(1, 1, lastRow, Math.max(5, attendanceSheet.getLastColumn())).getDisplayValues();
+      const dataRows = values.slice(1)
+        .filter(row => row.some(value => String(value).trim() !== ''))
+        .map(function(row) { return row.length >= 6 ? [row[0], row[1], row[2], row[3], row[5]] : row.slice(0, 5); });
       return respond_({ success: true, items: dataRows, values: dataRows, count: dataRows.length }, getCallback_(e));
     }
 
@@ -137,35 +139,41 @@ function saveAttendance_(payload) {
   const submittedAt = getSubmissionTimestamp_();
 
   const lastRow = attendanceSheet.getLastRow();
-  const existingRows = lastRow > 1 ? attendanceSheet.getRange(2, 1, lastRow - 1, 6).getDisplayValues() : [];
-  const knownKeys = new Set(existingRows.map(function(row) { return attendanceKey_(row[0], row[1], row[2], row[3], row[4]); }));
+  const existingWidth = Math.max(5, attendanceSheet.getLastColumn());
+  const rawExistingRows = lastRow > 1 ? attendanceSheet.getRange(2, 1, lastRow - 1, existingWidth).getDisplayValues() : [];
+  const existingRows = rawExistingRows.map(function(row) { return row.length >= 6 ? [row[0], row[1], row[2], row[3], row[5]] : row.slice(0, 5); });
+  const knownKeys = new Set(existingRows.map(function(row) { return attendanceKey_(row[0], row[1], row[2], row[3]); }));
   const rows = [];
 
   data.forEach(function(item) {
     let row;
     if (Array.isArray(item)) {
-      row = [item[0] || '', item[1] || '', item[2] || '', item[3] || '', item[4] || '', submittedAt];
+      row = [item[0] || '', item[1] || '', item[2] || '', item[3] || '', item[4] || submittedAt];
     } else {
-      row = [item.date || item.tanggal || '', item.shift || '', item.location || item.lokasi || item.lokasiKerja || '', item.name || item.nama || '', item.reporterName || item.reporter || '', submittedAt];
+      row = [item.date || item.tanggal || '', item.shift || '', item.location || item.lokasi || item.lokasiKerja || '', item.name || item.nama || '', submittedAt];
     }
-    const key = attendanceKey_(row[0], row[1], row[2], row[3], row[4]);
+    const key = attendanceKey_(row[0], row[1], row[2], row[3]);
     if (!knownKeys.has(key)) {
       knownKeys.add(key);
       rows.push(row);
     }
   });
 
-  attendanceSheet.getRange(1, 1, 1, 6).setValues([['Tanggal', 'Shift', 'Lokasi Kerja', 'Nama', 'Nama Pelapor', 'Timestamp Pengumpulan']]);
+  attendanceSheet.clearContents();
+  attendanceSheet.getRange(1, 1, 1, 5).setValues([['Tanggal', 'Shift', 'Lokasi Kerja', 'Nama', 'Timestamp Pengumpulan']]);
 
+  if (existingRows.length > 0) {
+    attendanceSheet.getRange(2, 1, existingRows.length, 5).setValues(existingRows);
+  }
   if (rows.length > 0) {
-    attendanceSheet.getRange(attendanceSheet.getLastRow() + 1, 1, rows.length, 6).setValues(rows);
+    attendanceSheet.getRange(attendanceSheet.getLastRow() + 1, 1, rows.length, 5).setValues(rows);
   }
 
   return respond_({ success: true, message: 'Data Daily Absensi berhasil disimpan.', sheet: ATTENDANCE_SHEET_NAME, count: rows.length }, '');
 }
 
-function attendanceKey_(date, shift, location, name, reporter) {
-  return [date, shift, location, name, reporter].map(function(value) { return String(value || '').trim().toLowerCase(); }).join('|');
+function attendanceKey_(date, shift, location, name) {
+  return [date, shift, location, name].map(function(value) { return String(value || '').trim().toLowerCase(); }).join('|');
 }
 
 function saveProduction_(payload) {
@@ -372,8 +380,7 @@ export function readAttendanceFromGoogleSheets(url) {
         shift: row[1] || '',
         location: row[2] || '',
         name: row[3] || '',
-        reporterName: row[4] || '',
-        submissionTimestamp: row[5] || '',
+        submissionTimestamp: row[4] || '',
       })));
     };
 

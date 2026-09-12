@@ -36,10 +36,6 @@ export default function DailyAttendance({ attendance, onSaveAttendance, onSyncAt
 
         <form className="attendanceForm" onSubmit={save}>
           <label>
-            Nama Pelapor
-            <input value={form.reporterName} onChange={(event) => update('reporterName', event.target.value)} placeholder="Nama pengirim absensi" required />
-          </label>
-          <label>
             Tanggal / Hari / Bulan / Tahun
             <input type="date" value={form.date} onChange={(event) => update('date', event.target.value)} required />
           </label>
