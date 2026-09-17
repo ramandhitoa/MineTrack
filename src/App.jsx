@@ -15,6 +15,7 @@ import Weekly from './pages/Weekly';
 import Monthly from './pages/Monthly';
 import Pending from './pages/Pending';
 import Excel from './pages/Excel';
+import OreGetting from './pages/OreGetting';
 import { pageTitles, STORAGE_KEYS } from './constants';
 import {
   emptyAttendance,
@@ -446,6 +447,8 @@ export default function App() {
 
         {activeTab === 'mingguan' && <Weekly logs={logs} />}
         {activeTab === 'bulanan' && <Monthly logs={logs} />}
+
+        {activeTab === 'oregetting' && <OreGetting />}
 
         {activeTab === 'absensi' && (
           <DailyAttendance
