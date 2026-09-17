@@ -28,8 +28,11 @@ export default function Daily({
               <option>Pit BETA</option>
               <option>Pit Rantepao Barat</option>
               <option>Rantepao Timur</option>
+              <option>Rantepao Selatan</option>
               <option>Rantapao Extend</option>
               <option>Pit A1M</option>
+              <option>Pit A1E</option>
+              <option>Pit A1S</option>
               <option>Pit A3M</option>
               <option>Pit IRG</option>
               <option>Pit AKP 6</option>
