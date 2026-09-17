@@ -112,65 +112,61 @@ function doPost(e) {
 }
 
 function saveAttendance_(payload) {
-  const attendanceSheet = getAttendanceSheet_();
-  let data = Array.isArray(payload.values) ? payload.values : Array.isArray(payload.items) ? payload.items : [];
+  const sheet = getAttendanceSheet_();
+  const items = Array.isArray(payload.items) ? payload.items : Array.isArray(payload.values) ? payload.values : [];
   const submittedAt = getSubmissionTimestamp_();
 
-  const lastRow = attendanceSheet.getLastRow();
-  const existingWidth = Math.max(5, attendanceSheet.getLastColumn());
-  const rawExistingRows = lastRow > 1 ? attendanceSheet.getRange(2, 1, lastRow - 1, existingWidth).getDisplayValues() : [];
-  const existingRows = rawExistingRows.map(function(row) { return row.length >= 6 ? [row[0], row[1], row[2], row[3], row[5]] : row.slice(0, 5); });
-  const knownKeys = new Set(existingRows.map(function(row) { return attendanceKey_(row[0], row[1], row[2], row[3]); }));
-  const rows = [];
+  if (!items.length) {
+    return respond_({ success: true, message: 'Tidak ada data Daily Absensi baru.', sheet: ATTENDANCE_SHEET_NAME, count: 0 }, '');
+  }
 
-  data.forEach(function(item) {
-    let row;
+  const rows = items.map(function(item) {
     if (Array.isArray(item)) {
-      row = [item[0] || '', item[1] || '', item[2] || '', item[3] || '', item[4] || submittedAt];
-    } else {
-      row = [item.date || item.tanggal || '', item.shift || '', item.location || item.lokasi || item.lokasiKerja || '', item.name || item.nama || '', submittedAt];
+      return [
+        item[0] || '',
+        item[1] || '',
+        item[2] || '',
+        item[3] || '',
+        item[4] || submittedAt
+      ];
     }
-    const key = attendanceKey_(row[0], row[1], row[2], row[3]);
-    if (!knownKeys.has(key)) {
-      knownKeys.add(key);
-      rows.push(row);
-    }
+
+    return [
+      item.date || item.tanggal || '',
+      item.shift || '',
+      item.location || item.lokasi || item.lokasiKerja || '',
+      item.name || item.nama || '',
+      item.submissionTimestamp || submittedAt
+    ];
   });
 
-  attendanceSheet.clearContents();
-  attendanceSheet.getRange(1, 1, 1, 5).setValues([['Tanggal', 'Shift', 'Lokasi Kerja', 'Nama', 'Timestamp Pengumpulan']]);
-
-  if (existingRows.length > 0) {
-    attendanceSheet.getRange(2, 1, existingRows.length, 5).setValues(existingRows);
-  }
-  if (rows.length > 0) {
-    attendanceSheet.getRange(attendanceSheet.getLastRow() + 1, 1, rows.length, 5).setValues(rows);
-  }
+  const startRow = sheet.getLastRow() + 1;
+  sheet.getRange(startRow, 1, rows.length, 5).setValues(rows);
 
   return respond_({ success: true, message: 'Data Daily Absensi berhasil disimpan.', sheet: ATTENDANCE_SHEET_NAME, count: rows.length }, '');
 }
 
 function saveProduction_(payload) {
   const sheet = getSheet_();
-  let items = Array.isArray(payload.items) ? payload.items : Array.isArray(payload.values) ? payload.values : [];
+  const items = Array.isArray(payload.items) ? payload.items : Array.isArray(payload.values) ? payload.values : [];
   const submittedAt = getSubmissionTimestamp_();
 
-  sheet.clearContents();
-  sheet.getRange(1, 1, 1, HEADERS.length).setValues([HEADERS]);
-
-  if (items.length > 0) {
-    const rows = items.map(function(item) {
-      if (Array.isArray(item)) {
-        const row = item.slice(0, HEADERS.length - 1);
-        while (row.length < HEADERS.length - 1) row.push('');
-        row.push(item.length >= HEADERS.length ? item[HEADERS.length - 1] || submittedAt : submittedAt);
-        return row;
-      }
-      return itemToRow_(item, submittedAt);
-    });
-
-    sheet.getRange(2, 1, rows.length, HEADERS.length).setValues(rows);
+  if (!items.length) {
+    return respond_({ success: true, message: 'Tidak ada data produksi baru.', sheet: SHEET_NAME, count: 0 }, '');
   }
+
+  const rows = items.map(function(item) {
+    if (Array.isArray(item)) {
+      const row = item.slice(0, HEADERS.length - 1);
+      while (row.length < HEADERS.length - 1) row.push('');
+      row.push(item.length >= HEADERS.length ? item[HEADERS.length - 1] || submittedAt : submittedAt);
+      return row;
+    }
+    return itemToRow_(item, submittedAt);
+  });
+
+  const startRow = sheet.getLastRow() + 1;
+  sheet.getRange(startRow, 1, rows.length, HEADERS.length).setValues(rows);
 
   return respond_({ success: true, message: 'Data MineTrack berhasil disimpan.', sheet: SHEET_NAME, count: items.length }, '');
 }
@@ -180,22 +176,22 @@ function saveOreGetting_(payload) {
   const items = Array.isArray(payload.items) ? payload.items : Array.isArray(payload.values) ? payload.values : [];
   const submittedAt = getSubmissionTimestamp_();
 
-  ensureHeaders_(sheet, ORE_GETTING_HEADERS);
-
-  if (items.length > 0) {
-    const rows = items.map(function(item) {
-      if (Array.isArray(item)) {
-        const row = item.slice(0, ORE_GETTING_HEADERS.length - 1);
-        while (row.length < ORE_GETTING_HEADERS.length - 1) row.push('');
-        row.push(item.length >= ORE_GETTING_HEADERS.length ? item[ORE_GETTING_HEADERS.length - 1] || submittedAt : submittedAt);
-        return row;
-      }
-      return oreGettingToRow_(item, submittedAt);
-    });
-
-    const nextRow = sheet.getLastRow() + 1;
-    sheet.getRange(nextRow, 1, rows.length, ORE_GETTING_HEADERS.length).setValues(rows);
+  if (!items.length) {
+    return respond_({ success: true, message: 'Tidak ada data Ore Getting baru.', sheet: ORE_GETTING_SHEET_NAME, count: 0 }, '');
   }
+
+  const rows = items.map(function(item) {
+    if (Array.isArray(item)) {
+      const row = item.slice(0, ORE_GETTING_HEADERS.length - 1);
+      while (row.length < ORE_GETTING_HEADERS.length - 1) row.push('');
+      row.push(item.length >= ORE_GETTING_HEADERS.length ? item[ORE_GETTING_HEADERS.length - 1] || submittedAt : submittedAt);
+      return row;
+    }
+    return oreGettingToRow_(item, submittedAt);
+  });
+
+  const startRow = sheet.getLastRow() + 1;
+  sheet.getRange(startRow, 1, rows.length, ORE_GETTING_HEADERS.length).setValues(rows);
 
   return respond_({ success: true, message: 'Data Ore Getting berhasil disimpan.', sheet: ORE_GETTING_SHEET_NAME, count: items.length }, '');
 }
@@ -203,7 +199,9 @@ function saveOreGetting_(payload) {
 function getSheet_() {
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   let sheet = ss.getSheetByName(SHEET_NAME);
-  if (!sheet) sheet = ss.insertSheet(SHEET_NAME);
+  if (!sheet) {
+    sheet = ss.insertSheet(SHEET_NAME, 0);
+  }
   ensureHeaders_(sheet, HEADERS);
   return sheet;
 }
@@ -211,7 +209,9 @@ function getSheet_() {
 function getAttendanceSheet_() {
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   let sheet = ss.getSheetByName(ATTENDANCE_SHEET_NAME);
-  if (!sheet) sheet = ss.insertSheet(ATTENDANCE_SHEET_NAME);
+  if (!sheet) {
+    sheet = ss.insertSheet(ATTENDANCE_SHEET_NAME, 1);
+  }
   ensureHeaders_(sheet, ['Tanggal', 'Shift', 'Lokasi Kerja', 'Nama', 'Timestamp Pengumpulan']);
   return sheet;
 }
@@ -220,12 +220,7 @@ function getOreGettingSheet_() {
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   let sheet = ss.getSheetByName(ORE_GETTING_SHEET_NAME);
   if (!sheet) {
-    const sheets = ss.getSheets();
-    if (sheets.length >= 2) {
-      sheet = ss.insertSheet(ORE_GETTING_SHEET_NAME, 2);
-    } else {
-      sheet = ss.insertSheet(ORE_GETTING_SHEET_NAME);
-    }
+    sheet = ss.insertSheet(ORE_GETTING_SHEET_NAME, 2);
   }
   ensureHeaders_(sheet, ORE_GETTING_HEADERS);
   return sheet;
@@ -233,13 +228,31 @@ function getOreGettingSheet_() {
 
 function ensureHeaders_(sheet, headers) {
   if (!sheet) return;
-  const lastRow = sheet.getLastRow();
-  const headerRow = lastRow > 0 ? sheet.getRange(1, 1, 1, Math.max(headers.length, sheet.getLastColumn())).getValues()[0] : [];
-  const needsHeader = headerRow.length === 0 || String(headerRow[0] || '').trim() !== String(headers[0] || '').trim();
+
+  if (sheet.getLastRow() === 0) {
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+    return;
+  }
+
+  const row = sheet.getRange(1, 1, 1, Math.max(headers.length, sheet.getLastColumn())).getValues()[0];
+  const normalized = row.slice(0, headers.length).map(function(value) {
+    return String(value || '').trim().toLowerCase();
+  });
+  const expected = headers.map(function(header) {
+    return String(header || '').trim().toLowerCase();
+  });
+
+  const needsHeader = normalized.length !== expected.length || normalized.some(function(value, index) {
+    return value !== expected[index];
+  });
 
   if (needsHeader) {
+    const existing = sheet.getRange(2, 1, Math.max(1, sheet.getLastRow() - 1), Math.max(sheet.getLastColumn(), headers.length)).getValues();
     sheet.clearContents();
     sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+    if (existing.length > 0 && existing[0].some(function(value) { return String(value || '').trim() !== ''; })) {
+      sheet.getRange(2, 1, existing.length, Math.max(sheet.getLastColumn(), headers.length)).setValues(existing);
+    }
   }
 }
 

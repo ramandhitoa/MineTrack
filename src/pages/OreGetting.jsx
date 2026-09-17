@@ -11,6 +11,7 @@ import { DEFAULT_GOOGLE_APPS_SCRIPT_URL } from '../services/googleSheetsService'
 const STORAGE_KEY = 'mineTrack_ore_getting_records';
 
 const initialForm = {
+  date: new Date().toISOString().slice(0, 10),
   areaPit: areaPitOptions[0],
   shift: 'Shift 1 (Siang)',
   metode: 'CEK',
@@ -57,7 +58,9 @@ export default function OreGetting() {
     try {
       const response = await fetch(gsUrl, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'text/plain;charset=utf-8',
+        },
         body: JSON.stringify({
           type: 'oregetting',
           items: [{
@@ -73,11 +76,14 @@ export default function OreGetting() {
       }
 
       const result = await response.json();
-      if (!result?.success) {
+      if (result?.success !== true) {
         throw new Error(result?.message || 'Gagal menyimpan ke Google Sheets');
       }
+
+      return result;
     } catch (error) {
-      console.warn('Ore Getting sync failed:', error);
+      console.error('Ore Getting sync failed:', error);
+      throw error;
     }
   };
 
@@ -106,10 +112,18 @@ export default function OreGetting() {
 
         <form onSubmit={handleSubmit} className="form" style={{ paddingTop: 12 }}>
           <div className="formGrid4">
+            <div className="fieldHeader">Tanggal</div>
             <div className="fieldHeader">Area PIT</div>
             <div className="fieldHeader">Shift</div>
             <div className="fieldHeader">Metode</div>
-            <div className="fieldHeader">ID Metode</div>
+
+            <label className="field">
+              <input
+                type="date"
+                value={form.date || ''}
+                onChange={(event) => updateField('date', event.target.value)}
+              />
+            </label>
 
             <label className="field">
               <select value={form.areaPit} onChange={(event) => updateField('areaPit', event.target.value)}>
@@ -132,6 +146,13 @@ export default function OreGetting() {
                 <option value="PSI">PSI</option>
               </select>
             </label>
+          </div>
+
+          <div className="formGrid4">
+            <div className="fieldHeader">ID Metode</div>
+            <div className="fieldHeader">Acuan</div>
+            <div className="fieldHeader">Titik Bor</div>
+            <div className="fieldHeader">Block Model</div>
 
             <label className="field">
               <input
@@ -140,13 +161,6 @@ export default function OreGetting() {
                 placeholder="Nomor ID metode"
               />
             </label>
-          </div>
-
-          <div className="formGrid4">
-            <div className="fieldHeader">Acuan</div>
-            <div className="fieldHeader">Titik Bor</div>
-            <div className="fieldHeader">Block Model</div>
-            <div className="fieldHeader">Elevasi</div>
 
             <label className="field">
               <input
@@ -171,6 +185,13 @@ export default function OreGetting() {
                 placeholder="Block model"
               />
             </label>
+          </div>
+
+          <div className="formGrid4" style={{ marginTop: 12 }}>
+            <div className="fieldHeader">Elevasi</div>
+            <div style={{ visibility: 'hidden' }} className="fieldHeader">Spacer</div>
+            <div style={{ visibility: 'hidden' }} className="fieldHeader">Spacer</div>
+            <div style={{ visibility: 'hidden' }} className="fieldHeader">Spacer</div>
 
             <label className="field">
               <input
@@ -196,6 +217,7 @@ export default function OreGetting() {
           <table>
             <thead>
               <tr>
+                <th>Tanggal</th>
                 <th>Area PIT</th>
                 <th>Shift</th>
                 <th>Metode</th>
@@ -204,24 +226,27 @@ export default function OreGetting() {
                 <th>Titik Bor</th>
                 <th>Block Model</th>
                 <th>Elevasi</th>
+                <th>Timestamp Pengumpulan</th>
               </tr>
             </thead>
             <tbody>
               {records.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="emptyState">Belum ada data ore getting.</td>
+                  <td colSpan={10} className="emptyState">Belum ada data ore getting.</td>
                 </tr>
               ) : (
                 records.map((record) => (
                   <tr key={record.id}>
-                    <td>{record.areaPit}</td>
-                    <td>{record.shift}</td>
-                    <td>{record.metode}</td>
+                    <td>{record.date || '-'}</td>
+                    <td>{record.areaPit || '-'}</td>
+                    <td>{record.shift || '-'}</td>
+                    <td>{record.metode || '-'}</td>
                     <td>{record.idMetode || '-'}</td>
                     <td>{record.acuan || '-'}</td>
                     <td>{record.titikBor || '-'}</td>
                     <td>{record.blockModel || '-'}</td>
                     <td>{record.elevasi || '-'}</td>
+                    <td>{record.submissionTimestamp || record.createdAt || '-'}</td>
                   </tr>
                 ))
               )}
