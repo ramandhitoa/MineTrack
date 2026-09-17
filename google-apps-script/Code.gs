@@ -1,20 +1,25 @@
 // ============================================================
 // GRADE CONTROL AKP - GOOGLE APPS SCRIPT API
-// FIXED VERSION
 // Support:
 // 1. Data Produksi
 // 2. Data Daily Absensi
-// 3. Format payload lama dan baru
+// 3. Data Ore Getting
+// 4. Format payload lama dan baru
 // ============================================================
 
 const SPREADSHEET_ID = '18oh2WCDf5p6xSyE1_sDOxCSY6HtV87fpMoEfhDm9cRs';
 const SHEET_NAME = 'Laporan Produksi';
 const ATTENDANCE_SHEET_NAME = 'Daily Absensi';
+const ORE_GETTING_SHEET_NAME = 'Ore Getting';
 
 const HEADERS = [
   'Tanggal', 'Blok', 'Shift', 'Pit', 'Dumping', 'Sublot', 'Retase', 'Status',
   'Block Model', 'Acuan', 'Titik Bor', 'Elevasi', 'Metode', 'Alat Berat',
   'Tonase', 'Acuan Ni%', 'Nama Pelapor', 'Timestamp Pengumpulan'
+];
+
+const ORE_GETTING_HEADERS = [
+  'Tanggal', 'Area PIT', 'Shift', 'Metode', 'ID Metode', 'Acuan', 'Titik Bor', 'Block Model', 'Elevasi', 'Timestamp Pengumpulan'
 ];
 
 function doGet(e) {
@@ -33,6 +38,22 @@ function doGet(e) {
       const dataRows = values.slice(1)
         .filter(row => row.some(value => String(value).trim() !== ''))
         .map(function(row) { return row.length >= 6 ? [row[0], row[1], row[2], row[3], row[5]] : row.slice(0, 5); });
+      return respond_({ success: true, items: dataRows, values: dataRows, count: dataRows.length }, getCallback_(e));
+    }
+
+    if (type === 'oregetting' || type === 'ore_getting') {
+      const oreSheet = getOreGettingSheet_();
+      const lastRow = oreSheet.getLastRow();
+
+      if (lastRow <= 1) {
+        return respond_({ success: true, items: [], values: [], count: 0 }, getCallback_(e));
+      }
+
+      const values = oreSheet.getRange(1, 1, lastRow, Math.max(10, oreSheet.getLastColumn())).getDisplayValues();
+      const dataRows = values.slice(1)
+        .filter(row => row.some(value => String(value).trim() !== ''))
+        .map(rowToOreGettingItem_);
+
       return respond_({ success: true, items: dataRows, values: dataRows, count: dataRows.length }, getCallback_(e));
     }
 
@@ -76,11 +97,15 @@ function doPost(e) {
       return saveProduction_(payload);
     }
 
+    if (type === 'oregetting' || type === 'ore_getting') {
+      return saveOreGetting_(payload);
+    }
+
     if (payload.values || payload.items) {
       return saveProduction_(payload);
     }
 
-    throw new Error('Jenis data tidak dikenali. Gunakan type "absensi" atau "produksi".');
+    throw new Error('Jenis data tidak dikenali. Gunakan type "absensi", "produksi", atau "oregetting".');
   } catch (error) {
     return respond_({ success: false, message: error.message, count: 0 }, '');
   }
@@ -125,10 +150,6 @@ function saveAttendance_(payload) {
   return respond_({ success: true, message: 'Data Daily Absensi berhasil disimpan.', sheet: ATTENDANCE_SHEET_NAME, count: rows.length }, '');
 }
 
-function attendanceKey_(date, shift, location, name) {
-  return [date, shift, location, name].map(function(value) { return String(value || '').trim().toLowerCase(); }).join('|');
-}
-
 function saveProduction_(payload) {
   const sheet = getSheet_();
   let items = Array.isArray(payload.items) ? payload.items : Array.isArray(payload.values) ? payload.values : [];
@@ -154,6 +175,31 @@ function saveProduction_(payload) {
   return respond_({ success: true, message: 'Data MineTrack berhasil disimpan.', sheet: SHEET_NAME, count: items.length }, '');
 }
 
+function saveOreGetting_(payload) {
+  const sheet = getOreGettingSheet_();
+  const items = Array.isArray(payload.items) ? payload.items : Array.isArray(payload.values) ? payload.values : [];
+  const submittedAt = getSubmissionTimestamp_();
+
+  sheet.clearContents();
+  sheet.getRange(1, 1, 1, ORE_GETTING_HEADERS.length).setValues([ORE_GETTING_HEADERS]);
+
+  if (items.length > 0) {
+    const rows = items.map(function(item) {
+      if (Array.isArray(item)) {
+        const row = item.slice(0, ORE_GETTING_HEADERS.length - 1);
+        while (row.length < ORE_GETTING_HEADERS.length - 1) row.push('');
+        row.push(item.length >= ORE_GETTING_HEADERS.length ? item[ORE_GETTING_HEADERS.length - 1] || submittedAt : submittedAt);
+        return row;
+      }
+      return oreGettingToRow_(item, submittedAt);
+    });
+
+    sheet.getRange(2, 1, rows.length, ORE_GETTING_HEADERS.length).setValues(rows);
+  }
+
+  return respond_({ success: true, message: 'Data Ore Getting berhasil disimpan.', sheet: ORE_GETTING_SHEET_NAME, count: items.length }, '');
+}
+
 function getSheet_() {
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   let sheet = ss.getSheetByName(SHEET_NAME);
@@ -166,6 +212,24 @@ function getAttendanceSheet_() {
   let sheet = ss.getSheetByName(ATTENDANCE_SHEET_NAME);
   if (!sheet) sheet = ss.insertSheet(ATTENDANCE_SHEET_NAME);
   return sheet;
+}
+
+function getOreGettingSheet_() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  let sheet = ss.getSheetByName(ORE_GETTING_SHEET_NAME);
+  if (!sheet) {
+    const sheets = ss.getSheets();
+    if (sheets.length >= 2) {
+      sheet = ss.insertSheet(ORE_GETTING_SHEET_NAME, 2);
+    } else {
+      sheet = ss.insertSheet(ORE_GETTING_SHEET_NAME);
+    }
+  }
+  return sheet;
+}
+
+function attendanceKey_(date, shift, location, name) {
+  return [date, shift, location, name].map(function(value) { return String(value || '').trim().toLowerCase(); }).join('|');
 }
 
 function attendanceToRow_(item) {
@@ -209,8 +273,21 @@ function itemToRow_(item, submittedAt) {
   ];
 }
 
-function getSubmissionTimestamp_() {
-  return Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm');
+function oreGettingToRow_(item, submittedAt) {
+  const today = item.date || new Date().toISOString().slice(0, 10);
+
+  return [
+    today,
+    item.areaPit || item.area || '',
+    item.shift || '',
+    item.metode || '',
+    item.idMetode || '',
+    item.acuan || '',
+    item.titikBor || '',
+    item.blockModel || '',
+    item.elevasi || '',
+    item.submissionTimestamp || item.createdAt || item.timestamp || submittedAt
+  ];
 }
 
 function rowToItem_(row) {
@@ -238,6 +315,21 @@ function rowToItem_(row) {
     niGrade: Number(row[15]) || 0,
     reporterName: String(row[16] || '').trim(),
     submissionTimestamp: String(row[17] || '').trim()
+  };
+}
+
+function rowToOreGettingItem_(row) {
+  return {
+    date: formatDate_(row[0]),
+    areaPit: String(row[1] || '').trim(),
+    shift: String(row[2] || '').trim(),
+    metode: String(row[3] || '').trim(),
+    idMetode: String(row[4] || '').trim(),
+    acuan: String(row[5] || '').trim(),
+    titikBor: String(row[6] || '').trim(),
+    blockModel: String(row[7] || '').trim(),
+    elevasi: String(row[8] || '').trim(),
+    submissionTimestamp: String(row[9] || '').trim()
   };
 }
 

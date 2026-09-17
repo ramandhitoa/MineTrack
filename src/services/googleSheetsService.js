@@ -22,6 +22,7 @@ export const DEFAULT_GOOGLE_APPS_SCRIPT_URL =
 // Nama sheet/tab yang dipakai oleh Apps Script.
 export const GOOGLE_SHEET_NAME = 'Laporan Produksi';
 export const GOOGLE_ATTENDANCE_SHEET_NAME = 'Daily Absensi';
+export const GOOGLE_ORE_GETTING_SHEET_NAME = 'Ore Getting';
 
 // ------------------------------------------------------------
 // SCRIPT GOOGLE APPS SCRIPT
@@ -33,11 +34,13 @@ export const GOOGLE_APPS_SCRIPT = `// ==========================================
 // SESUAI TEMPLATE SHEET:
 // - Laporan Produksi
 // - Daily Absensi
+// - Ore Getting
 // ============================================================
 
 const SPREADSHEET_ID = '${GOOGLE_SPREADSHEET_ID}';
 const SHEET_NAME = '${GOOGLE_SHEET_NAME}';
 const ATTENDANCE_SHEET_NAME = '${GOOGLE_ATTENDANCE_SHEET_NAME}';
+const ORE_GETTING_SHEET_NAME = '${GOOGLE_ORE_GETTING_SHEET_NAME}';
 
 const HEADERS = [
   'Tanggal',
@@ -60,6 +63,19 @@ const HEADERS = [
   'Timestamp Pengumpulan'
 ];
 
+const ORE_GETTING_HEADERS = [
+  'Tanggal',
+  'Area PIT',
+  'Shift',
+  'Metode',
+  'ID Metode',
+  'Acuan',
+  'Titik Bor',
+  'Block Model',
+  'Elevasi',
+  'Timestamp Pengumpulan'
+];
+
 function doGet(e) {
   try {
     const type = e && e.parameter ? String(e.parameter.type || '').toLowerCase() : '';
@@ -75,6 +91,20 @@ function doGet(e) {
       const dataRows = values.slice(1)
         .filter(row => row.some(value => String(value).trim() !== ''))
         .map(function(row) { return row.length >= 6 ? [row[0], row[1], row[2], row[3], row[5]] : row.slice(0, 5); });
+      return respond_({ success: true, items: dataRows, values: dataRows, count: dataRows.length }, getCallback_(e));
+    }
+
+    if (type === 'oregetting' || type === 'ore_getting') {
+      const oreSheet = getOreGettingSheet_();
+      const lastRow = oreSheet.getLastRow();
+      if (lastRow <= 1) {
+        return respond_({ success: true, items: [], values: [], count: 0 }, getCallback_(e));
+      }
+
+      const values = oreSheet.getRange(1, 1, lastRow, Math.max(10, oreSheet.getLastColumn())).getDisplayValues();
+      const dataRows = values.slice(1)
+        .filter(row => row.some(value => String(value).trim() !== ''))
+        .map(rowToOreGettingItem_);
       return respond_({ success: true, items: dataRows, values: dataRows, count: dataRows.length }, getCallback_(e));
     }
 
@@ -118,11 +148,15 @@ function doPost(e) {
       return saveProduction_(payload);
     }
 
+    if (type === 'oregetting' || type === 'ore_getting') {
+      return saveOreGetting_(payload);
+    }
+
     if (payload.values || payload.items) {
       return saveProduction_(payload);
     }
 
-    throw new Error('Jenis data tidak dikenali. Gunakan type "absensi" atau "produksi".');
+    throw new Error('Jenis data tidak dikenali. Gunakan type "absensi", "produksi", atau "oregetting".');
   } catch (error) {
     return respond_({ success: false, message: error.message, count: 0 }, '');
   }
@@ -196,6 +230,31 @@ function saveProduction_(payload) {
   return respond_({ success: true, message: 'Data MineTrack berhasil disimpan.', sheet: SHEET_NAME, count: items.length }, '');
 }
 
+function saveOreGetting_(payload) {
+  const sheet = getOreGettingSheet_();
+  const items = Array.isArray(payload.items) ? payload.items : Array.isArray(payload.values) ? payload.values : [];
+  const submittedAt = getSubmissionTimestamp_();
+
+  sheet.clearContents();
+  sheet.getRange(1, 1, 1, ORE_GETTING_HEADERS.length).setValues([ORE_GETTING_HEADERS]);
+
+  if (items.length > 0) {
+    const rows = items.map(function(item) {
+      if (Array.isArray(item)) {
+        const row = item.slice(0, ORE_GETTING_HEADERS.length - 1);
+        while (row.length < ORE_GETTING_HEADERS.length - 1) row.push('');
+        row.push(item.length >= ORE_GETTING_HEADERS.length ? item[ORE_GETTING_HEADERS.length - 1] || submittedAt : submittedAt);
+        return row;
+      }
+      return oreGettingToRow_(item, submittedAt);
+    });
+
+    sheet.getRange(2, 1, rows.length, ORE_GETTING_HEADERS.length).setValues(rows);
+  }
+
+  return respond_({ success: true, message: 'Data Ore Getting berhasil disimpan.', sheet: ORE_GETTING_SHEET_NAME, count: items.length }, '');
+}
+
 function getSheet_() {
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   let sheet = ss.getSheetByName(SHEET_NAME);
@@ -207,6 +266,20 @@ function getAttendanceSheet_() {
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   let sheet = ss.getSheetByName(ATTENDANCE_SHEET_NAME);
   if (!sheet) sheet = ss.insertSheet(ATTENDANCE_SHEET_NAME);
+  return sheet;
+}
+
+function getOreGettingSheet_() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  let sheet = ss.getSheetByName(ORE_GETTING_SHEET_NAME);
+  if (!sheet) {
+    const sheets = ss.getSheets();
+    if (sheets.length >= 2) {
+      sheet = ss.insertSheet(ORE_GETTING_SHEET_NAME, 2);
+    } else {
+      sheet = ss.insertSheet(ORE_GETTING_SHEET_NAME);
+    }
+  }
   return sheet;
 }
 
@@ -251,6 +324,23 @@ function itemToRow_(item, submittedAt) {
   ];
 }
 
+function oreGettingToRow_(item, submittedAt) {
+  const today = item.date || new Date().toISOString().slice(0, 10);
+
+  return [
+    today,
+    item.areaPit || item.area || '',
+    item.shift || '',
+    item.metode || '',
+    item.idMetode || '',
+    item.acuan || '',
+    item.titikBor || '',
+    item.blockModel || '',
+    item.elevasi || '',
+    item.submissionTimestamp || item.createdAt || item.timestamp || submittedAt
+  ];
+}
+
 function getSubmissionTimestamp_() {
   return Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm');
 }
@@ -280,6 +370,21 @@ function rowToItem_(row) {
     niGrade: Number(row[15]) || 0,
     reporterName: String(row[16] || '').trim(),
     submissionTimestamp: String(row[17] || '').trim()
+  };
+}
+
+function rowToOreGettingItem_(row) {
+  return {
+    date: formatDate_(row[0]),
+    areaPit: String(row[1] || '').trim(),
+    shift: String(row[2] || '').trim(),
+    metode: String(row[3] || '').trim(),
+    idMetode: String(row[4] || '').trim(),
+    acuan: String(row[5] || '').trim(),
+    titikBor: String(row[6] || '').trim(),
+    blockModel: String(row[7] || '').trim(),
+    elevasi: String(row[8] || '').trim(),
+    submissionTimestamp: String(row[9] || '').trim()
   };
 }
 

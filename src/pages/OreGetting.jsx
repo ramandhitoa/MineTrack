@@ -6,6 +6,7 @@
 
 import { useEffect, useState } from 'react';
 import { areaPitOptions } from '../data/initialData';
+import { DEFAULT_GOOGLE_APPS_SCRIPT_URL } from '../services/googleSheetsService';
 
 const STORAGE_KEY = 'mineTrack_ore_getting_records';
 
@@ -48,15 +49,51 @@ export default function OreGetting() {
     setForm((current) => ({ ...current, [key]: value }));
   };
 
-  const handleSubmit = (event) => {
+  const syncOreGettingToGoogleSheets = async (record) => {
+    const gsUrl = localStorage.getItem('minetrack_gsheets_url') || DEFAULT_GOOGLE_APPS_SCRIPT_URL;
+
+    if (!gsUrl) return;
+
+    try {
+      const response = await fetch(gsUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'oregetting',
+          items: [{
+            ...record,
+            date: record.date || new Date().toISOString().slice(0, 10),
+            submissionTimestamp: new Date().toISOString(),
+          }],
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      const result = await response.json();
+      if (!result?.success) {
+        throw new Error(result?.message || 'Gagal menyimpan ke Google Sheets');
+      }
+    } catch (error) {
+      console.warn('Ore Getting sync failed:', error);
+    }
+  };
+
+  const handleSubmit = async (event) => {
     event.preventDefault();
+    const timestamp = new Date().toISOString();
     const newRecord = {
       id: Date.now(),
       ...form,
-      createdAt: new Date().toISOString(),
+      date: form.date || new Date().toISOString().slice(0, 10),
+      createdAt: timestamp,
+      submissionTimestamp: timestamp,
     };
 
     setRecords((current) => [newRecord, ...current]);
+    await syncOreGettingToGoogleSheets(newRecord);
     setForm(initialForm);
   };
 
