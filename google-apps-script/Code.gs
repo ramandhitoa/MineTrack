@@ -180,8 +180,7 @@ function saveOreGetting_(payload) {
   const items = Array.isArray(payload.items) ? payload.items : Array.isArray(payload.values) ? payload.values : [];
   const submittedAt = getSubmissionTimestamp_();
 
-  sheet.clearContents();
-  sheet.getRange(1, 1, 1, ORE_GETTING_HEADERS.length).setValues([ORE_GETTING_HEADERS]);
+  ensureHeaders_(sheet, ORE_GETTING_HEADERS);
 
   if (items.length > 0) {
     const rows = items.map(function(item) {
@@ -194,7 +193,8 @@ function saveOreGetting_(payload) {
       return oreGettingToRow_(item, submittedAt);
     });
 
-    sheet.getRange(2, 1, rows.length, ORE_GETTING_HEADERS.length).setValues(rows);
+    const nextRow = sheet.getLastRow() + 1;
+    sheet.getRange(nextRow, 1, rows.length, ORE_GETTING_HEADERS.length).setValues(rows);
   }
 
   return respond_({ success: true, message: 'Data Ore Getting berhasil disimpan.', sheet: ORE_GETTING_SHEET_NAME, count: items.length }, '');
@@ -204,6 +204,7 @@ function getSheet_() {
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   let sheet = ss.getSheetByName(SHEET_NAME);
   if (!sheet) sheet = ss.insertSheet(SHEET_NAME);
+  ensureHeaders_(sheet, HEADERS);
   return sheet;
 }
 
@@ -211,6 +212,7 @@ function getAttendanceSheet_() {
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   let sheet = ss.getSheetByName(ATTENDANCE_SHEET_NAME);
   if (!sheet) sheet = ss.insertSheet(ATTENDANCE_SHEET_NAME);
+  ensureHeaders_(sheet, ['Tanggal', 'Shift', 'Lokasi Kerja', 'Nama', 'Timestamp Pengumpulan']);
   return sheet;
 }
 
@@ -225,7 +227,24 @@ function getOreGettingSheet_() {
       sheet = ss.insertSheet(ORE_GETTING_SHEET_NAME);
     }
   }
+  ensureHeaders_(sheet, ORE_GETTING_HEADERS);
   return sheet;
+}
+
+function ensureHeaders_(sheet, headers) {
+  if (!sheet) return;
+  const lastRow = sheet.getLastRow();
+  const headerRow = lastRow > 0 ? sheet.getRange(1, 1, 1, Math.max(headers.length, sheet.getLastColumn())).getValues()[0] : [];
+  const needsHeader = headerRow.length === 0 || String(headerRow[0] || '').trim() !== String(headers[0] || '').trim();
+
+  if (needsHeader) {
+    sheet.clearContents();
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+  }
+}
+
+function getSubmissionTimestamp_() {
+  return new Date().toISOString();
 }
 
 function attendanceKey_(date, shift, location, name) {
