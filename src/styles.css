@@ -1084,6 +1084,14 @@ header {
   grid-template-columns:repeat(4,1fr);
   margin-bottom:10px;
 }
+.fieldHeader {
+  color:#e2e8f0;
+  font-size:10px;
+  font-weight:800;
+  letter-spacing:.04em;
+  text-transform:uppercase;
+  padding:0 2px 4px;
+}
 .checks {
   display:grid;
   grid-template-columns:repeat(2,1fr);

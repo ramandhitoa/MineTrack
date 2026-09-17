@@ -69,8 +69,12 @@ export default function OreGetting() {
 
         <form onSubmit={handleSubmit} className="form" style={{ paddingTop: 12 }}>
           <div className="formGrid4">
+            <div className="fieldHeader">Area PIT</div>
+            <div className="fieldHeader">Shift</div>
+            <div className="fieldHeader">Metode</div>
+            <div className="fieldHeader">ID Metode</div>
+
             <label className="field">
-              Area PIT
               <select value={form.areaPit} onChange={(event) => updateField('areaPit', event.target.value)}>
                 {areaPitOptions.map((pit) => (
                   <option key={pit} value={pit}>{pit}</option>
@@ -79,7 +83,6 @@ export default function OreGetting() {
             </label>
 
             <label className="field">
-              Shift
               <select value={form.shift} onChange={(event) => updateField('shift', event.target.value)}>
                 <option>Shift 1 (Siang)</option>
                 <option>Shift 2 (Malam)</option>
@@ -87,7 +90,6 @@ export default function OreGetting() {
             </label>
 
             <label className="field">
-              Metode
               <select value={form.metode} onChange={(event) => updateField('metode', event.target.value)}>
                 <option value="CEK">CEK</option>
                 <option value="PSI">PSI</option>
@@ -95,7 +97,6 @@ export default function OreGetting() {
             </label>
 
             <label className="field">
-              ID Metode
               <input
                 value={form.idMetode}
                 onChange={(event) => updateField('idMetode', event.target.value)}
@@ -105,8 +106,12 @@ export default function OreGetting() {
           </div>
 
           <div className="formGrid4">
+            <div className="fieldHeader">Acuan</div>
+            <div className="fieldHeader">Titik Bor</div>
+            <div className="fieldHeader">Block Model</div>
+            <div className="fieldHeader">Elevasi</div>
+
             <label className="field">
-              Acuan
               <input
                 value={form.acuan}
                 onChange={(event) => updateField('acuan', event.target.value)}
@@ -115,7 +120,6 @@ export default function OreGetting() {
             </label>
 
             <label className="field">
-              Titik Bor
               <input
                 value={form.titikBor}
                 onChange={(event) => updateField('titikBor', event.target.value)}
@@ -124,7 +128,6 @@ export default function OreGetting() {
             </label>
 
             <label className="field">
-              Block Model
               <input
                 value={form.blockModel}
                 onChange={(event) => updateField('blockModel', event.target.value)}
@@ -133,7 +136,6 @@ export default function OreGetting() {
             </label>
 
             <label className="field">
-              Elevasi
               <input
                 value={form.elevasi}
                 onChange={(event) => updateField('elevasi', event.target.value)}
