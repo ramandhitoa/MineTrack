@@ -285,6 +285,8 @@ export default function App() {
     const newLog = {
       ...dailyForm,
       id: Date.now(),
+      status: dailyForm.status || 'Open',
+      block: dailyForm.block || '',
       ritPrevious,
       ritToday,
       ritTotal,

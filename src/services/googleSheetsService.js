@@ -41,26 +41,21 @@ const ATTENDANCE_SHEET_NAME = '${GOOGLE_ATTENDANCE_SHEET_NAME}';
 
 const HEADERS = [
   'Tanggal',
+  'Blok',
   'Shift',
-  'Area Pit',
-  'Alat Berat',
+  'Pit',
   'Dumping',
-  'Block Model',
-  'Sample',
-  'Hole',
-  'Elevasi',
-  'Loading',
-  'Material',
   'Sublot',
-  'Start Time',
-  'Stop Time',
-  'Rit Today',
+  'Retase',
+  'Status',
+  'Block Model',
+  'Acuan',
+  'Titik Bor',
+  'Elevasi',
+  'Metode',
+  'Alat Berat',
   'Tonase',
-  'Total Rit',
-  'Total Tonase',
-  'Assay Ni',
-  'Assay Fe',
-  'MC',
+  'Acuan Ni%',
   'Nama Pelapor',
   'Timestamp Pengumpulan'
 ];
@@ -233,31 +228,24 @@ function looksLikeHeader_(row) {
 
 function itemToRow_(item, submittedAt) {
   const ritToday = Number(item.ritToday) || 0;
-  const ritTotal = Number(item.ritTotal) || 0;
-  const ritPrevious = Number(item.ritPrevious) || Math.max(0, ritTotal - ritToday);
 
   return [
     item.date || '',
+    item.block || item.blockModel || '',
     item.shift || '',
     item.pit || '',
-    Array.isArray(item.equipment) ? item.equipment.join(', ') : (item.equipment || ''),
     item.dumpingArea || '',
+    item.sublot || '',
+    ritToday,
+    item.status || '',
     item.blockModel || '',
     item.sampleRef || '',
     item.drillHole || '',
     item.elevation || '',
     item.loadingMethod || '',
-    item.material || '',
-    item.sublot || '',
-    item.startTime || '',
-    item.stopTime || '',
-    ritToday,
+    Array.isArray(item.equipment) ? item.equipment.join(', ') : (item.equipment || ''),
     Number(item.tonnage) || 0,
-    ritTotal,
-    Number(item.totalTonnage) || Number(item.tonnage) || 0,
     Number(item.niGrade) || 0,
-    Number(item.feGrade) || 0,
-    Number(item.mc) || 0,
     item.reporterName || item.reporter || '',
     item.submissionTimestamp || submittedAt
   ];
@@ -268,36 +256,30 @@ function getSubmissionTimestamp_() {
 }
 
 function rowToItem_(row) {
-  const ritToday = Number(row[14]) || 0;
-  const tonnage = Number(row[15]) || 0;
-  const ritTotal = Number(row[16]) || 0;
+  const ritToday = Number(row[6]) || 0;
 
   return {
     id: 'gs-' + Utilities.getUuid(),
     date: formatDate_(row[0]),
-    shift: String(row[1] || ''),
-    pit: String(row[2] || ''),
-    equipment: row[3] ? String(row[3]).split(',').map(function(v) { return v.trim(); }).filter(Boolean) : [],
+    block: String(row[1] || ''),
+    shift: String(row[2] || ''),
+    pit: String(row[3] || ''),
     dumpingArea: String(row[4] || ''),
-    blockModel: String(row[5] || ''),
-    sampleRef: String(row[6] || ''),
-    drillHole: String(row[7] || ''),
-    elevation: String(row[8] || ''),
-    loadingMethod: String(row[9] || ''),
-    material: String(row[10] || ''),
-    sublot: String(row[11] || '').trim(),
-    startTime: String(row[12] || '').trim(),
-    stopTime: String(row[13] || '').trim(),
-    ritPrevious: Math.max(0, ritTotal - ritToday),
+    sublot: String(row[5] || '').trim(),
+    ritPrevious: 0,
     ritToday: ritToday,
-    ritTotal: ritTotal,
-    tonnage: tonnage,
-    totalTonnage: Number(row[17]) || 0,
-    niGrade: Number(row[18]) || 0,
-    feGrade: Number(row[19]) || 0,
-    mc: Number(row[20]) || 0,
-    reporterName: String(row[21] || '').trim(),
-    submissionTimestamp: String(row[22] || '').trim()
+    ritTotal: ritToday,
+    status: String(row[7] || ''),
+    blockModel: String(row[8] || ''),
+    sampleRef: String(row[9] || ''),
+    drillHole: String(row[10] || ''),
+    elevation: String(row[11] || ''),
+    loadingMethod: String(row[12] || ''),
+    equipment: row[13] ? String(row[13]).split(',').map(function(v) { return v.trim(); }).filter(Boolean) : [],
+    tonnage: Number(row[14]) || 0,
+    niGrade: Number(row[15]) || 0,
+    reporterName: String(row[16] || '').trim(),
+    submissionTimestamp: String(row[17] || '').trim()
   };
 }
 

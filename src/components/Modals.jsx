@@ -14,13 +14,17 @@ export function DailyModal({ data, setData, onClose, onSave }) {
     <Modal title="Input Laporan Hasil Kerja Shift & QC Nikel" close={onClose} className="dailyModal">
       <form onSubmit={onSave} className="form">
         <fieldset>
-          <legend>1. Tanggal, Shift & Pit Location</legend>
-          <div className="formGrid3">
-            <Field label="Nama Pelapor">
-              <input value={data.reporterName} onChange={(e) => update('reporterName', e.target.value)} placeholder="Nama pengirim laporan" required />
-            </Field>
+          <legend>1. Data Umum</legend>
+          <div className="formGrid4">
             <Field label="Tanggal">
               <input type="date" value={data.date} onChange={(e) => update('date', e.target.value)} required />
+            </Field>
+            <Field label="Blok">
+              <select value={data.block || 'A'} onChange={(e) => update('block', e.target.value)}>
+                <option value="A">A</option>
+                <option value="B">B</option>
+                <option value="AKP">AKP</option>
+              </select>
             </Field>
             <Field label="Shift">
               <select value={data.shift} onChange={(e) => update('shift', e.target.value)}>
@@ -28,7 +32,7 @@ export function DailyModal({ data, setData, onClose, onSave }) {
                 <option>Shift 2 (Malam)</option>
               </select>
             </Field>
-            <Field label="Area Pit">
+            <Field label="Pit">
               <select value={data.pit} onChange={(e) => update('pit', e.target.value)}>
                 {areaPitOptions.map((pit) => <option key={pit}>{pit}</option>)}
               </select>
@@ -37,120 +41,96 @@ export function DailyModal({ data, setData, onClose, onSave }) {
         </fieldset>
 
         <fieldset>
-          <legend>2. Alat Berat, Dumping & Loading Method</legend>
-          <Field label="Alat Berat">
-            <div className="checks">
-              {equipmentOptions.map((equipment) => (
-                <label key={equipment}>
-                  <input
-                    type="checkbox"
-                    checked={data.equipment.includes(equipment)}
-                    onChange={(event) => {
-                      const nextEquipment = event.target.checked
-                        ? [...data.equipment, equipment]
-                        : data.equipment.filter((item) => item !== equipment);
-                      update('equipment', nextEquipment);
-                    }}
-                  />
-                  {equipment}
-                </label>
-              ))}
-            </div>
-          </Field>
-
-          <div className="formGrid2">
-            <Field label="Area Dumpingan">
+          <legend>2. Lokasi & Operasi</legend>
+          <div className="formGrid4">
+            <Field label="Dumping">
               <input
                 value={data.dumpingArea}
                 onChange={(e) => update('dumpingArea', e.target.value)}
-                placeholder="Masukkan area dumpingan"
+                placeholder="Area dumping"
                 required
               />
             </Field>
-            <Field label="Loading Method">
-              <select value={data.loadingMethod} onChange={(e) => update('loadingMethod', e.target.value)}>
-                <option>Direct</option>
-                <option>Tongkang</option>
-                <option>Dome</option>
+            <Field label="Sublot">
+              <input value={data.sublot} onChange={(e) => update('sublot', e.target.value)} required />
+            </Field>
+            <Field label="Retase">
+              <input type="number" value={data.ritToday} onChange={(e) => update('ritToday', Number(e.target.value))} required />
+            </Field>
+            <Field label="Status">
+              <select value={data.status || 'Open'} onChange={(e) => update('status', e.target.value)}>
+                <option>Open</option>
+                <option>In Progress</option>
+                <option>Close</option>
               </select>
             </Field>
           </div>
         </fieldset>
 
         <fieldset>
-          <legend>3. BlockModel, Acuan Sample & Geologi</legend>
+          <legend>3. Geologi & Sample</legend>
           <div className="formGrid4">
             {[
-              ['blockModel', 'BlockModel'],
-              ['sampleRef', 'Acuan Sample'],
+              ['blockModel', 'Block Model'],
+              ['sampleRef', 'Acuan'],
               ['drillHole', 'Titik Bor'],
-              ['elevation', 'Elevasi RL'],
+              ['elevation', 'Elevasi'],
             ].map(([key, label]) => (
               <Field label={label} key={key}>
                 <input value={data[key]} onChange={(e) => update(key, e.target.value)} required />
               </Field>
             ))}
           </div>
-
           <div className="formGrid2">
-            <Field label="Material">
-              <select value={data.material} onChange={(e) => update('material', e.target.value)}>
-                <option>Limonite</option>
-                <option>Saprolite</option>
+            <Field label="Metode">
+              <select value={data.loadingMethod} onChange={(e) => update('loadingMethod', e.target.value)}>
+                <option>Direct</option>
+                <option>Tongkang</option>
+                <option>Dome</option>
               </select>
             </Field>
-            <Field label="Sublot">
-              <input value={data.sublot} onChange={(e) => update('sublot', e.target.value)} required />
-            </Field>
-          </div>
-        </fieldset>
-
-        <fieldset>
-          <legend>4. Start/Stop Time & Perhitungan Ritase</legend>
-          <div className="formGrid3">
-            <Field label="Start Time">
-              <input type="time" value={data.startTime} onChange={(e) => update('startTime', e.target.value)} required />
-            </Field>
-            <Field label="Stop Time">
-              <input type="time" value={data.stopTime} onChange={(e) => update('stopTime', e.target.value)} required />
-            </Field>
-            <Field label="Rit Sebelum">
-              <input type="number" value={data.ritPrevious} onChange={(e) => update('ritPrevious', Number(e.target.value))} required />
-            </Field>
-          </div>
-
-          <div className="formGrid2">
-            <Field label="Rit Hari Ini">
-              <input type="number" value={data.ritToday} onChange={(e) => update('ritToday', Number(e.target.value))} required />
-            </Field>
-            <Field label="Total Ritase">
-              <div className="readonly">{Number(data.ritPrevious || 0) + Number(data.ritToday || 0)} Rit</div>
-            </Field>
-          </div>
-        </fieldset>
-
-        <fieldset>
-          <legend>5. Tonase & Assay Kadar Quality Control</legend>
-          <div className="formGrid4">
-            <Field label="Tonase">
-              <div className="readonly">
-                {((Number(data.ritPrevious || 0) + Number(data.ritToday || 0)) * 15)} MT
+            <Field label="Alat Berat">
+              <div className="checks">
+                {equipmentOptions.map((equipment) => (
+                  <label key={equipment}>
+                    <input
+                      type="checkbox"
+                      checked={data.equipment.includes(equipment)}
+                      onChange={(event) => {
+                        const nextEquipment = event.target.checked
+                          ? [...data.equipment, equipment]
+                          : data.equipment.filter((item) => item !== equipment);
+                        update('equipment', nextEquipment);
+                      }}
+                    />
+                    {equipment}
+                  </label>
+                ))}
               </div>
             </Field>
-            {[
-              ['niGrade', 'Ni %'],
-              ['feGrade', 'Fe %'],
-              ['mc', 'MC %'],
-            ].map(([key, label]) => (
-              <Field label={label} key={key}>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={data[key]}
-                  onChange={(e) => update(key, Number(e.target.value))}
-                />
-              </Field>
-            ))}
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>4. Quality Control</legend>
+          <div className="formGrid4">
+            <Field label="Tonase">
+              <div className="readonly">{((Number(data.ritPrevious || 0) + Number(data.ritToday || 0)) * 15)} MT</div>
+            </Field>
+            <Field label="Acuan Ni%">
+              <input
+                type="number"
+                step="0.01"
+                value={data.niGrade}
+                onChange={(e) => update('niGrade', Number(e.target.value))}
+              />
+            </Field>
+            <Field label="Nama Pelapor">
+              <input value={data.reporterName} onChange={(e) => update('reporterName', e.target.value)} placeholder="Nama pengirim laporan" required />
+            </Field>
+            <Field label="Timestamp Pengumpulan">
+              <div className="readonly">{new Date().toLocaleString('id-ID')}</div>
+            </Field>
           </div>
         </fieldset>
 
