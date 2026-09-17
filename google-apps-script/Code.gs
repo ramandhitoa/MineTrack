@@ -10,7 +10,7 @@
 const SPREADSHEET_ID = '18oh2WCDf5p6xSyE1_sDOxCSY6HtV87fpMoEfhDm9cRs';
 const SHEET_NAME = 'Laporan Produksi';
 const ATTENDANCE_SHEET_NAME = 'Daily Absensi';
-const ORE_GETTING_SHEET_NAME = 'Ore Getting';
+const ORE_GETTING_SHEET_NAME = 'Laporan Ore Getting';
 
 const HEADERS = [
   'Tanggal', 'Blok', 'Shift', 'Pit', 'Dumping', 'Sublot', 'Retase', 'Status',

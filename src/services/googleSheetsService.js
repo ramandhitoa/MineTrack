@@ -17,12 +17,12 @@ export const GOOGLE_SPREADSHEET_ID = '18oh2WCDf5p6xSyE1_sDOxCSY6HtV87fpMoEfhDm9c
 
 // URL Apps Script Web App resmi yang terhubung ke spreadsheet di atas.
 export const DEFAULT_GOOGLE_APPS_SCRIPT_URL =
-  'https://script.google.com/macros/s/AKfycbwbwns-V_ntd-pM9DgiILWWKrB_1Bl1aG6kwsdtVgs-zynYYFxyLTC4UqnDDV7Q1YQbLA/exec';
+  'https://script.google.com/macros/s/AKfycbwri4WH2Gvw4ocNccpq86dDXYjGsg71DAN7bmMd1OZmd1o_sNg-dxpYILhON3vbSVr6Mw/exec';
 
 // Nama sheet/tab yang dipakai oleh Apps Script.
 export const GOOGLE_SHEET_NAME = 'Laporan Produksi';
 export const GOOGLE_ATTENDANCE_SHEET_NAME = 'Daily Absensi';
-export const GOOGLE_ORE_GETTING_SHEET_NAME = 'Ore Getting';
+export const GOOGLE_ORE_GETTING_SHEET_NAME = 'Laporan Ore Getting';
 
 // ------------------------------------------------------------
 // SCRIPT GOOGLE APPS SCRIPT
