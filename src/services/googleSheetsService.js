@@ -668,13 +668,16 @@ export async function syncLogsToGoogleSheets(url, logs) {
 
   try {
     const response = await fetch(endpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      },
-      body: JSON.stringify({ type: 'production', items: logs, values: logs }),
-    });
+  method: 'POST',
+  headers: {
+    'Content-Type': 'text/plain;charset=utf-8',
+  },
+  body: JSON.stringify({
+    type: 'production',
+    items: logs,
+    values: logs,
+  }),
+});
 
     const text = await response.text();
     const payload = parseJsonResponse_(text);
@@ -802,9 +805,8 @@ export async function syncAttendanceToGoogleSheets(
       method: 'POST',
 
       headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      },
+  'Content-Type': 'text/plain;charset=utf-8',
+},
 
       body: JSON.stringify({
         type: 'attendance',
