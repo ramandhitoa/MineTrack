@@ -38,14 +38,13 @@ export function normalizeAttendanceValue(value = '') {
 
 export function attendanceKey(item = {}) {
   const date = normalizeAttendanceValue(item.date || item.tanggal || '').toLowerCase();
-  const shift = normalizeAttendanceValue(item.shift || '').toLowerCase();
   const name = normalizeAttendanceValue(item.name || item.nama || '').toLowerCase();
 
-  if (!date || !shift || !name) {
+  if (!date || !name) {
     return '';
   }
 
-  return `${date}|${shift}|${name}`;
+  return `${date}|${name}`;
 }
 
 export function mergeAttendanceItems(items = []) {
@@ -63,7 +62,7 @@ export function mergeAttendanceItems(items = []) {
     };
 
     const key = attendanceKey(normalizedItem);
-    if (!key || !normalizedItem.date || !normalizedItem.shift || !normalizedItem.name) return;
+    if (!key || !normalizedItem.date || !normalizedItem.name) return;
 
     if (indexes[key] === undefined) {
       indexes[key] = merged.length;

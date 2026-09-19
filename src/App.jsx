@@ -372,6 +372,7 @@ export default function App() {
       id: Date.now(),
     };
 
+    // Harus konsisten dengan key server-side Apps Script: tanggal + nama.
     const candidateKey = attendanceKey(candidate);
 
     let remoteAttendance = [];
