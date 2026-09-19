@@ -34,7 +34,12 @@ const getWeekStart = (date) => {
   return value;
 };
 
-const formatDate = (date) => date.toISOString().slice(0, 10);
+const formatDate = (date) => new Intl.DateTimeFormat('sv-SE', {
+  timeZone: 'Asia/Makassar',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+}).format(date);
 
 const groupByWeekAndPit = (logs) => {
   const groups = new Map();

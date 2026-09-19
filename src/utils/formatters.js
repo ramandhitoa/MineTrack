@@ -5,11 +5,44 @@
 
 export const fmt = (value) => new Intl.NumberFormat('id-ID').format(Number(value) || 0);
 
+export const toWitaDateInput = (value = new Date()) => {
+  const date = value instanceof Date ? value : new Date(value);
+  return new Intl.DateTimeFormat('sv-SE', {
+    timeZone: 'Asia/Makassar',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(date);
+};
+
+export const formatWitaDate = (value) => {
+  if (!value) return '-';
+  const date = value instanceof Date ? value : new Date(value);
+  return new Intl.DateTimeFormat('id-ID', {
+    timeZone: 'Asia/Makassar',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  }).format(date);
+};
+
+export const formatWitaTime = (value) => {
+  if (!value) return '-';
+  const date = value instanceof Date ? value : new Date(value);
+  return new Intl.DateTimeFormat('id-ID', {
+    timeZone: 'Asia/Makassar',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).format(date);
+};
+
 export const dateFmt = (value) => (value ? value.split('-').reverse().join('/') : '-');
 
 export const materialClass = (material) => {
-  if (material === 'Saprolite') return 'hg';
-  if (material === 'Limonite') return 'lim';
+  const normalized = String(material || '').trim();
+  if (normalized === 'Saprolit' || normalized === 'Saprolite') return 'hg';
+  if (normalized === 'Limonit' || normalized === 'Limonite') return 'lim';
   return 'ob';
 };
 

@@ -45,8 +45,8 @@ export default function Daily({
             Filter Material
             <select value={filterMaterial} onChange={(event) => setFilterMaterial(event.target.value)}>
               <option>Semua</option>
-              <option>Limonite</option>
-              <option>Saprolite</option>
+              <option>Limonit</option>
+              <option>Saprolit</option>
             </select>
           </label>
 

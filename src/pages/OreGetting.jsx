@@ -7,11 +7,12 @@
 import { useEffect, useState } from 'react';
 import { areaPitOptions } from '../data/initialData';
 import { DEFAULT_GOOGLE_APPS_SCRIPT_URL } from '../services/googleSheetsService';
+import { toWitaDateInput } from '../utils/formatters';
 
 const STORAGE_KEY = 'mineTrack_ore_getting_records';
 
 const initialForm = {
-  date: new Date().toISOString().slice(0, 10),
+  date: toWitaDateInput(),
   areaPit: areaPitOptions[0],
   shift: 'Shift 1 (Siang)',
   metode: 'CEK',
@@ -65,8 +66,8 @@ export default function OreGetting() {
           type: 'oregetting',
           items: [{
             ...record,
-            date: record.date || new Date().toISOString().slice(0, 10),
-            submissionTimestamp: new Date().toISOString(),
+            date: record.date || toWitaDateInput(),
+            submissionTimestamp: new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Makassar' })).toISOString(),
           }],
         }),
       });
@@ -89,11 +90,11 @@ export default function OreGetting() {
 
   const handleSubmit = async (event) => {
     event.preventDefault();
-    const timestamp = new Date().toISOString();
+    const timestamp = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Makassar' })).toISOString();
     const newRecord = {
       id: Date.now(),
       ...form,
-      date: form.date || new Date().toISOString().slice(0, 10),
+      date: form.date || toWitaDateInput(),
       createdAt: timestamp,
       submissionTimestamp: timestamp,
     };
@@ -246,7 +247,7 @@ export default function OreGetting() {
                     <td>{record.titikBor || '-'}</td>
                     <td>{record.blockModel || '-'}</td>
                     <td>{record.elevasi || '-'}</td>
-                    <td>{record.submissionTimestamp || record.createdAt || '-'}</td>
+                    <td>{record.submissionTimestamp ? new Intl.DateTimeFormat('id-ID', { timeZone: 'Asia/Makassar', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(record.submissionTimestamp)) : (record.createdAt ? new Intl.DateTimeFormat('id-ID', { timeZone: 'Asia/Makassar', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(record.createdAt)) : '-')}</td>
                   </tr>
                 ))
               )}

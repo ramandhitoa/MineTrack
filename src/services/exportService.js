@@ -40,7 +40,7 @@ export const exportLogsAsCSV = (logs) => {
   const anchor = document.createElement('a');
 
   anchor.href = url;
-  anchor.download = `Laporan_QC_Tambang_Nikel_${new Date().toISOString().slice(0, 10)}.csv`;
+  anchor.download = `Laporan_QC_Tambang_Nikel_${new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Makassar' })).toISOString().slice(0, 10)}.csv`;
   document.body.appendChild(anchor);
   anchor.click();
   anchor.remove();

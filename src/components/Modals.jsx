@@ -81,7 +81,7 @@ export function DailyModal({ data, setData, onClose, onSave }) {
               </Field>
             ))}
           </div>
-          <div className="formGrid2">
+          <div className="formGrid3">
             <Field label="Metode">
               <select value={data.loadingMethod} onChange={(e) => update('loadingMethod', e.target.value)}>
                 <option>Direct</option>
@@ -108,6 +108,12 @@ export function DailyModal({ data, setData, onClose, onSave }) {
                 ))}
               </div>
             </Field>
+            <Field label="Material">
+              <select value={data.material || 'Saprolit'} onChange={(e) => update('material', e.target.value)}>
+                <option>Saprolit</option>
+                <option>Limonit</option>
+              </select>
+            </Field>
           </div>
         </fieldset>
 
@@ -129,7 +135,7 @@ export function DailyModal({ data, setData, onClose, onSave }) {
               <input value={data.reporterName} onChange={(e) => update('reporterName', e.target.value)} placeholder="Nama pengirim laporan" required />
             </Field>
             <Field label="Timestamp Pengumpulan">
-              <div className="readonly">{new Date().toLocaleString('id-ID')}</div>
+              <div className="readonly">{new Intl.DateTimeFormat('id-ID', { timeZone: 'Asia/Makassar', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date())}</div>
             </Field>
           </div>
         </fieldset>

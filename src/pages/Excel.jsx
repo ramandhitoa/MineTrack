@@ -6,7 +6,7 @@
 
 import { CloudUpload, Code2, Copy, Download, ExternalLink, FileSpreadsheet, RefreshCw } from 'lucide-react';
 
-export default function Excel({ gsUrl, onSync, onReload, onCopy, onExport, onOpenScript, spreadsheetId, gsLoading, gsStatus, gsRemoteCount }) {
+export default function Excel({ gsUrl, gsUrlInput, setGsUrlInput, onSaveUrl, onSync, onReload, onCopy, onExport, onOpenScript, spreadsheetId, gsLoading, gsStatus, gsRemoteCount }) {
   return (
     <section>
       <div className="panel excel">
@@ -40,9 +40,15 @@ export default function Excel({ gsUrl, onSync, onReload, onCopy, onExport, onOpe
         {/* CARD URL: endpoint resmi dikunci agar semua perangkat memakai sumber data yang sama. */}
         <div className="urlBox">
           <label>Webhook / Google Apps Script Web App URL</label>
-          <code>{gsUrl}</code>
-          <small>Endpoint resmi sudah dikunci. Semua pengguna otomatis memakai Google Spreadsheet yang sama.</small>
+          <input
+            type="url"
+            value={gsUrlInput ?? gsUrl}
+            onChange={(event) => setGsUrlInput(event.target.value)}
+            placeholder="https://script.google.com/macros/s/.../exec"
+          />
+          <small>Gunakan URL Web App berakhiran <b>/exec</b>. Jangan pakai link spreadsheet edit Google Sheets.</small>
           <div className="urlActions">
+            <button className="secondary" onClick={onSaveUrl} disabled={gsLoading}>Simpan URL</button>
             <button className="secondary" onClick={onReload} disabled={gsLoading}><RefreshCw size={14} /> Tes / Muat Data</button>
           </div>
         </div>

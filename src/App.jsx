@@ -23,9 +23,20 @@ import {
   emptyPending,
   initialPending,
 } from './data/initialData';
-import { calculateShiftHours } from './utils/formatters';
+import { calculateShiftHours, toWitaDateInput } from './utils/formatters';
 import { copyLogsAsTSV, exportLogsAsCSV } from './services/exportService';
-import { DEFAULT_GOOGLE_APPS_SCRIPT_URL, GOOGLE_APPS_SCRIPT, GOOGLE_SPREADSHEET_ID, readAttendanceFromGoogleSheets, readLogsFromGoogleSheets, syncAttendanceToGoogleSheets, syncLogsToGoogleSheets } from './services/googleSheetsService';
+import {
+  attendanceKey,
+  DEFAULT_GOOGLE_APPS_SCRIPT_URL,
+  getUnsyncedAttendanceItems,
+  GOOGLE_APPS_SCRIPT,
+  GOOGLE_SPREADSHEET_ID,
+  mergeAttendanceItems,
+  readAttendanceFromGoogleSheets,
+  readLogsFromGoogleSheets,
+  syncAttendanceToGoogleSheets,
+  syncLogsToGoogleSheets,
+} from './services/googleSheetsService';
 
 const readStorage = (key, fallback) => {
   try {
@@ -64,7 +75,24 @@ export default function App() {
   const [logs, setLogs] = useState(clearOldProgressOnce);
   const [pending, setPending] = useState(() => readStorage(STORAGE_KEYS.pending, initialPending));
   const [attendance, setAttendance] = useState(clearOldAttendanceOnce);
-  const [gsUrl] = useState(DEFAULT_GOOGLE_APPS_SCRIPT_URL);
+  const [gsUrl, setGsUrl] = useState(() => {
+    const finalUrl = DEFAULT_GOOGLE_APPS_SCRIPT_URL;
+    try {
+      localStorage.setItem('minetrack_gsheets_url', finalUrl);
+    } catch {
+      // ignore storage errors in private mode
+    }
+    return finalUrl;
+  });
+  const [gsUrlInput, setGsUrlInput] = useState(() => {
+    const finalUrl = DEFAULT_GOOGLE_APPS_SCRIPT_URL;
+    try {
+      localStorage.setItem('minetrack_gsheets_url', finalUrl);
+    } catch {
+      // ignore storage errors in private mode
+    }
+    return finalUrl;
+  });
   const [gsLoading, setGsLoading] = useState(false);
   const [gsStatus, setGsStatus] = useState('Belum terhubung');
   const [gsRemoteCount, setGsRemoteCount] = useState(null);
@@ -97,6 +125,41 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('mineTrackTheme', theme);
   }, [theme]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('minetrack_gsheets_url', DEFAULT_GOOGLE_APPS_SCRIPT_URL);
+      setGsUrl(DEFAULT_GOOGLE_APPS_SCRIPT_URL);
+      setGsUrlInput(DEFAULT_GOOGLE_APPS_SCRIPT_URL);
+    } catch {
+      // ignore storage errors in private mode
+    }
+  }, []);
+
+  const saveGsUrl = () => {
+    const candidate = String(gsUrlInput || '').trim().replace(/\s+/g, '');
+
+    if (!candidate) {
+      setGsUrl(DEFAULT_GOOGLE_APPS_SCRIPT_URL);
+      setGsUrlInput(DEFAULT_GOOGLE_APPS_SCRIPT_URL);
+      notify('URL Apps Script direset ke default.');
+      return;
+    }
+
+    if (/docs\.google\.com\/spreadsheets/i.test(candidate) || /\/spreadsheets\/d\//i.test(candidate)) {
+      notify('URL yang dimasukkan adalah link spreadsheet, bukan URL Web App Apps Script berakhiran /exec.');
+      return;
+    }
+
+    if (!candidate.includes('/exec')) {
+      notify('URL Apps Script harus berakhiran /exec.');
+      return;
+    }
+
+    setGsUrl(candidate);
+    setGsUrlInput(candidate);
+    notify('URL Apps Script berhasil disimpan.');
+  };
 
   // -------------------- Muat data pusat dari Google Sheets --------------------
   // Jika URL Apps Script sudah disimpan, Google Sheets menjadi sumber data
@@ -158,7 +221,7 @@ export default function App() {
     let cancelled = false;
     readAttendanceFromGoogleSheets(gsUrl)
       .then((remoteAttendance) => {
-        if (!cancelled && remoteAttendance.length > 0) setAttendance(remoteAttendance);
+        if (!cancelled && remoteAttendance.length > 0) setAttendance(mergeAttendanceItems(remoteAttendance));
       })
       .catch(() => {});
     return () => { cancelled = true; };
@@ -256,16 +319,23 @@ export default function App() {
     }
   };
 
-  const autoSyncAttendance = async (nextAttendance, message) => {
+  const autoSyncAttendance = async (newAttendanceItems, message) => {
     if (!gsUrl) return;
+
+    const cleanAttendance = mergeAttendanceItems(newAttendanceItems || []);
+    if (!cleanAttendance.length) {
+      setGsStatus('Absensi tidak ada yang perlu dikirim');
+      notify('Tidak ada data absensi baru yang valid untuk dikirim.');
+      return;
+    }
 
     setGsLoading(true);
     setGsStatus('Menyinkronkan Daily Absensi...');
     try {
-      await syncAttendanceToGoogleSheets(gsUrl, nextAttendance);
+      await syncAttendanceToGoogleSheets(gsUrl, cleanAttendance);
       const sharedAttendance = await readAttendanceFromGoogleSheets(gsUrl);
-      if (sharedAttendance.length > 0) setAttendance(sharedAttendance);
-      setGsStatus(`Absensi tersinkronisasi • ${nextAttendance.length} baris`);
+      setAttendance(mergeAttendanceItems(sharedAttendance));
+      setGsStatus(`Absensi tersinkronisasi • ${cleanAttendance.length} baris`);
       notify(message);
     } catch (error) {
       setGsStatus(`Gagal • ${error.message}`);
@@ -283,6 +353,8 @@ export default function App() {
     const ritToday = Number(dailyForm.ritToday) || 0;
     const ritTotal = ritPrevious + ritToday;
 
+    const parsedNiGrade = Number.isFinite(Number(dailyForm.niGrade)) ? Number(dailyForm.niGrade) : 0;
+
     const newLog = {
       ...dailyForm,
       id: Date.now(),
@@ -292,14 +364,14 @@ export default function App() {
       ritToday,
       ritTotal,
       tonnage: ritTotal * 15,
-      niGrade: Number(dailyForm.niGrade) || 0,
+      niGrade: parsedNiGrade,
       feGrade: Number(dailyForm.feGrade) || 0,
       mc: Number(dailyForm.mc) || 0,
     };
 
     const nextLogs = [newLog, ...logs];
     setLogs(nextLogs);
-    setDailyForm({ ...emptyDaily, date: new Date().toISOString().slice(0, 10) });
+    setDailyForm({ ...emptyDaily, date: toWitaDateInput() });
     setDailyOpen(false);
     await autoSyncProduction(nextLogs, 'Laporan produksi berhasil disimpan dan disinkronkan.');
   };
@@ -320,9 +392,37 @@ export default function App() {
 
   const saveAttendance = async (event, form) => {
     event.preventDefault();
-    const nextAttendance = [{ ...form, id: Date.now() }, ...attendance];
+
+    const candidate = {
+      ...form,
+      date: String(form.date || '').trim(),
+      shift: String(form.shift || '').trim(),
+      name: String(form.name || '').trim(),
+      id: Date.now(),
+    };
+
+    const candidateKey = attendanceKey(candidate);
+
+    let remoteAttendance = [];
+    if (gsUrl) {
+      try {
+        remoteAttendance = await readAttendanceFromGoogleSheets(gsUrl);
+      } catch {
+        remoteAttendance = [];
+      }
+    }
+
+    const existing = mergeAttendanceItems([...attendance, ...remoteAttendance]);
+    const alreadyExists = existing.some((item) => attendanceKey(item) === candidateKey);
+
+    if (alreadyExists || !candidateKey) {
+      notify('Absensi untuk nama, tanggal, dan shift ini sudah ada atau data belum valid. Data tidak dikirim ulang.');
+      return;
+    }
+
+    const nextAttendance = mergeAttendanceItems([candidate, ...attendance]);
     setAttendance(nextAttendance);
-    await autoSyncAttendance(nextAttendance, 'Data Daily Absensi berhasil disimpan dan disinkronkan.');
+    await autoSyncAttendance([candidate], 'Data Daily Absensi berhasil disimpan dan disinkronkan.');
   };
 
   // -------------------- Clipboard / CSV / Google Sheets --------------------
@@ -388,12 +488,29 @@ export default function App() {
       return;
     }
 
+    let remoteAttendance = [];
+    try {
+      remoteAttendance = await readAttendanceFromGoogleSheets(gsUrl);
+    } catch {
+      remoteAttendance = [];
+    }
+
+    const unsyncedAttendance = getUnsyncedAttendanceItems(attendance, remoteAttendance);
+
+    if (!unsyncedAttendance.length) {
+      setGsStatus('Semua absensi sudah sinkron');
+      notify('Tidak ada data absensi baru yang perlu dikirim.');
+      return;
+    }
+
     setGsLoading(true);
     setGsStatus('Mengirim data Daily Absensi...');
     try {
-      await syncAttendanceToGoogleSheets(gsUrl, attendance);
-      setGsStatus(`Absensi tersinkronisasi • ${attendance.length} baris`);
-      notify(`Data Daily Absensi berhasil disinkronisasi: ${attendance.length} baris.`);
+      await syncAttendanceToGoogleSheets(gsUrl, unsyncedAttendance);
+      const sharedAttendance = await readAttendanceFromGoogleSheets(gsUrl);
+      setAttendance(mergeAttendanceItems(sharedAttendance));
+      setGsStatus(`Absensi tersinkronisasi • ${unsyncedAttendance.length} baris`);
+      notify(`Data Daily Absensi berhasil disinkronisasi: ${unsyncedAttendance.length} baris.`);
     } catch (error) {
       setGsStatus(`Gagal • ${error.message}`);
       notify(`Gagal sinkronisasi absensi: ${error.message}`);
@@ -471,6 +588,9 @@ export default function App() {
         {activeTab === 'excel' && (
           <Excel
             gsUrl={gsUrl}
+            gsUrlInput={gsUrlInput}
+            setGsUrlInput={setGsUrlInput}
+            onSaveUrl={saveGsUrl}
             onSync={syncGoogleSheets}
             onReload={reloadGoogleSheets}
             onCopy={handleCopyExcel}

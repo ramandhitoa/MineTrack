@@ -59,7 +59,7 @@ export const initialPending = [
 
 export const emptyDaily = {
   reporterName: '',
-  date: '2026-09-09',
+  date: new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Makassar' })).toISOString().slice(0, 10),
   block: '',
   shift: 'Shift 1 (Siang)',
   pit: areaPitOptions[0],
@@ -70,7 +70,7 @@ export const emptyDaily = {
   drillHole: '',
   elevation: '',
   loadingMethod: 'Direct',
-  material: 'Saprolite',
+  material: 'Saprolit',
   sublot: '',
   status: 'Open',
   startTime: '07:00',
@@ -106,13 +106,13 @@ export const attendanceNames = [
   'MUHAMAD ANDIKA CHANDRA', 'MUHAMAD HAIKAL', 'MUHAMMAD IDHAM FARID', 'MUHAMMAD PRIHADI',
   'MUHAMMAD RIFKI SAPUTRA', 'MUHAMMAD RIZAL', 'NUR HADI RUSLI', 'PERDINAND ROLAND LOPANG',
   'RANGGA JUNIANTO T', 'RISKAL WAHYU', 'RISKY GLORIANUS GALUNTU', 'RISMAN RUMBIA', 'ROYAN FIRANSYAH',
-  'SABARUDIN', 'SAHRIN YANI', 'SAMSUL SATRIO AFRIANSYAH', 'SILVERIUS YUNRI SEABANI', 'SOFYAN',
+  'SABARUDIN', 'SAHRIN YANI', 'SAMSUL', 'SATRIO AFRIANSYAH', 'SILVERIUS YUNRI SEABANI', 'SOFYAN',
   'SULISTIAN', 'SULTAN', 'SURKHAN S. GARUSU', 'WISBAL JAYA KUSUMA', 'YUSWAN SARANANI',
   'ZAHWA AFRIZA GANSI', 'ZULFIKAR USMAN',
 ];
 
 export const emptyAttendance = {
-  date: new Date().toISOString().slice(0, 10),
+  date: new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Makassar' })).toISOString().slice(0, 10),
   shift: 'Shift 1',
   location: attendanceLocations[0],
   name: attendanceNames[0],
