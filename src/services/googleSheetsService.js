@@ -22,7 +22,8 @@
 // ID Google Spreadsheet pengguna.
 export const GOOGLE_SPREADSHEET_ID = '18oh2WCDf5p6xSyE1_sDOxCSY6HtV87fpMoEfhDm9cRs';
 
-// URL Apps Script Web App resmi yang terhubung ke spreadsheet di atas.
+// URL Apps Script Web App utama yang dipakai untuk sinkronisasi Excel.
+// Ditetapkan tetap ke URL ini agar tidak perlu menempelkan URL setiap kali update data.
 export const DEFAULT_GOOGLE_APPS_SCRIPT_URL =
   'https://script.google.com/macros/s/AKfycbwcIzzDJoBMyywQkbnZW8zXnAZhebAZF2Kw8RWzdB0M2GQ-6Bfu_BXa7Q5fNENOiwVr/exec';
 

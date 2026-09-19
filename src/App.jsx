@@ -75,24 +75,8 @@ export default function App() {
   const [logs, setLogs] = useState(clearOldProgressOnce);
   const [pending, setPending] = useState(() => readStorage(STORAGE_KEYS.pending, initialPending));
   const [attendance, setAttendance] = useState(clearOldAttendanceOnce);
-  const [gsUrl, setGsUrl] = useState(() => {
-    const finalUrl = DEFAULT_GOOGLE_APPS_SCRIPT_URL;
-    try {
-      localStorage.setItem('minetrack_gsheets_url', finalUrl);
-    } catch {
-      // ignore storage errors in private mode
-    }
-    return finalUrl;
-  });
-  const [gsUrlInput, setGsUrlInput] = useState(() => {
-    const finalUrl = DEFAULT_GOOGLE_APPS_SCRIPT_URL;
-    try {
-      localStorage.setItem('minetrack_gsheets_url', finalUrl);
-    } catch {
-      // ignore storage errors in private mode
-    }
-    return finalUrl;
-  });
+  const [gsUrl, setGsUrl] = useState(() => DEFAULT_GOOGLE_APPS_SCRIPT_URL);
+  const [gsUrlInput, setGsUrlInput] = useState(() => DEFAULT_GOOGLE_APPS_SCRIPT_URL);
   const [gsLoading, setGsLoading] = useState(false);
   const [gsStatus, setGsStatus] = useState('Belum terhubung');
   const [gsRemoteCount, setGsRemoteCount] = useState(null);
@@ -137,28 +121,15 @@ export default function App() {
   }, []);
 
   const saveGsUrl = () => {
-    const candidate = String(gsUrlInput || '').trim().replace(/\s+/g, '');
-
-    if (!candidate) {
-      setGsUrl(DEFAULT_GOOGLE_APPS_SCRIPT_URL);
-      setGsUrlInput(DEFAULT_GOOGLE_APPS_SCRIPT_URL);
-      notify('URL Apps Script direset ke default.');
-      return;
+    const fixedUrl = DEFAULT_GOOGLE_APPS_SCRIPT_URL;
+    setGsUrl(fixedUrl);
+    setGsUrlInput(fixedUrl);
+    try {
+      localStorage.setItem('minetrack_gsheets_url', fixedUrl);
+    } catch {
+      // ignore storage errors in private mode
     }
-
-    if (/docs\.google\.com\/spreadsheets/i.test(candidate) || /\/spreadsheets\/d\//i.test(candidate)) {
-      notify('URL yang dimasukkan adalah link spreadsheet, bukan URL Web App Apps Script berakhiran /exec.');
-      return;
-    }
-
-    if (!candidate.includes('/exec')) {
-      notify('URL Apps Script harus berakhiran /exec.');
-      return;
-    }
-
-    setGsUrl(candidate);
-    setGsUrlInput(candidate);
-    notify('URL Apps Script berhasil disimpan.');
+    notify('URL Web App sudah dikunci ke endpoint default untuk sinkronisasi Excel.');
   };
 
   // -------------------- Muat data pusat dari Google Sheets --------------------

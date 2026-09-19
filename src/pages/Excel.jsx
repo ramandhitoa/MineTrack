@@ -37,18 +37,12 @@ export default function Excel({ gsUrl, gsUrlInput, setGsUrlInput, onSaveUrl, onS
           <div className="gsStatus">Status: <b>{gsStatus}</b>{gsRemoteCount !== null && <span> • Data Google Sheets: {gsRemoteCount} baris</span>}</div>
         </div>
 
-        {/* CARD URL: endpoint resmi dikunci agar semua perangkat memakai sumber data yang sama. */}
+        {/* URL Web App dikunci secara permanen agar semua sinkronisasi memakai endpoint yang sama. */}
         <div className="urlBox">
           <label>Webhook / Google Apps Script Web App URL</label>
-          <input
-            type="url"
-            value={gsUrlInput ?? gsUrl}
-            onChange={(event) => setGsUrlInput(event.target.value)}
-            placeholder="https://script.google.com/macros/s/.../exec"
-          />
-          <small>Gunakan URL Web App berakhiran <b>/exec</b>. Jangan pakai link spreadsheet edit Google Sheets.</small>
+          <div className="lockedUrlValue"><code>{gsUrl}</code></div>
+          <small>URL ini sudah dikunci otomatis dan tidak perlu dimasukkan ulang saat sinkronisasi data Excel.</small>
           <div className="urlActions">
-            <button className="secondary" onClick={onSaveUrl} disabled={gsLoading}>Simpan URL</button>
             <button className="secondary" onClick={onReload} disabled={gsLoading}><RefreshCw size={14} /> Tes / Muat Data</button>
           </div>
         </div>
