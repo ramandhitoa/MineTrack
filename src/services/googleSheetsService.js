@@ -25,7 +25,7 @@ export const GOOGLE_SPREADSHEET_ID = '18oh2WCDf5p6xSyE1_sDOxCSY6HtV87fpMoEfhDm9c
 // URL Apps Script Web App utama yang dipakai untuk sinkronisasi Excel.
 // Ditetapkan tetap ke URL ini agar tidak perlu menempelkan URL setiap kali update data.
 export const DEFAULT_GOOGLE_APPS_SCRIPT_URL =
-  'https://script.google.com/macros/s/AKfycbzdKAfqBVzOyj7d7smxf_nO5JmTeeRZ0JMz6ASld3rc5lL8IzJBcvbHZOK7M42aENC6eA/exec';
+  'https://script.google.com/macros/s/AKfycbz69oRSWuhXbxQb5yTBwn1xduF9OLeUbwzxciw1_ybdvoTqwDEEeb1rmGQHZMU8T-7jUQ/exec';
 
 // Nama sheet/tab yang dipakai oleh Apps Script.
 export const GOOGLE_SHEET_NAME = 'Laporan Produksi';
