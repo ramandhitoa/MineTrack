@@ -142,10 +142,13 @@ export default function OreGetting() {
             </label>
 
             <label className="field">
-              <select value={form.metode} onChange={(event) => updateField('metode', event.target.value)}>
-                <option value="CEK">CEK</option>
-                <option value="PSI">PSI</option>
-              </select>
+             <select value={form.metode} onChange={(event) => updateField('metode', event.target.value)}>
+  <option value="PSI">PSI</option>
+  <option value="CEK">CEK</option>
+  <option value="TP">TP</option>
+  <option value="CH">CH</option>
+  <option value="HS">HS</option>
+</select>
             </label>
           </div>
 
