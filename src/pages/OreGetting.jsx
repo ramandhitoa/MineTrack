@@ -21,23 +21,42 @@ const initialForm = {
 function formatWitaTimestamp(value) {
   if (!value) return '-';
 
-  // Timestamp dari Apps Script sudah HH:MM WITA.
   const text = String(value).trim();
-  if (/^\d{1,2}:\d{2}$/.test(text)) {
-    const [hour, minute] = text.split(':');
-    return `${String(hour).padStart(2, '0')}:${minute}`;
+
+  // Jika timestamp sudah berupa HH:mm WITA
+  const timeMatch = text.match(/^(\d{1,2}):(\d{2})(?:\s*WITA)?$/i);
+
+  if (timeMatch) {
+    return `${String(timeMatch[1]).padStart(2, '0')}:${timeMatch[2]} WITA`;
   }
 
   try {
-    return new Intl.DateTimeFormat('id-ID', {
+    const date = new Date(value);
+
+    if (Number.isNaN(date.getTime())) {
+      return '-';
+    }
+
+    const time = new Intl.DateTimeFormat('id-ID', {
       timeZone: 'Asia/Makassar',
       hour: '2-digit',
       minute: '2-digit',
       hour12: false,
-    }).format(new Date(value));
+    }).format(date);
+
+    return `${time} WITA`;
   } catch {
     return '-';
   }
+}
+
+function getCurrentWitaTime() {
+  return new Intl.DateTimeFormat('id-ID', {
+    timeZone: 'Asia/Makassar',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).format(new Date());
 }
 
 export default function OreGetting() {
@@ -172,7 +191,9 @@ export default function OreGetting() {
       return;
     }
 
-    const timestamp = new Date().toISOString();
+    // Timestamp menggunakan waktu Makassar / WITA.
+    // Format yang disimpan: HH:mm WITA.
+    const timestamp = getCurrentWitaTime() + ' WITA';
 
     const newRecord = {
       id: Date.now(),
@@ -206,6 +227,7 @@ export default function OreGetting() {
       alert('Laporan Ore Getting berhasil disimpan.');
     } catch (error) {
       console.error('Gagal menyimpan Ore Getting:', error);
+
       alert(
         'Data Ore Getting gagal dikirim ke Google Sheets. ' +
           (error?.message || '')
@@ -223,6 +245,7 @@ export default function OreGetting() {
         <form className="formGrid4" onSubmit={handleSubmit}>
           <label>
             <span>Tanggal</span>
+
             <input
               type="date"
               value={form.date}
@@ -235,6 +258,7 @@ export default function OreGetting() {
 
           <label>
             <span>Area PIT</span>
+
             <select
               value={form.areaPit}
               onChange={(event) =>
@@ -252,6 +276,7 @@ export default function OreGetting() {
 
           <label>
             <span>Shift</span>
+
             <select
               value={form.shift}
               onChange={(event) =>
@@ -262,6 +287,7 @@ export default function OreGetting() {
               <option value="Shift 1 (Siang)">
                 Shift 1 (Siang)
               </option>
+
               <option value="Shift 2 (Malam)">
                 Shift 2 (Malam)
               </option>
@@ -270,6 +296,7 @@ export default function OreGetting() {
 
           <label>
             <span>Metode</span>
+
             <select
               value={form.metode}
               onChange={(event) =>
@@ -287,6 +314,7 @@ export default function OreGetting() {
 
           <label>
             <span>ID Metode</span>
+
             <input
               type="text"
               value={form.idMetode}
@@ -299,6 +327,7 @@ export default function OreGetting() {
 
           <label>
             <span>Acuan</span>
+
             <input
               type="text"
               value={form.acuan}
@@ -311,6 +340,7 @@ export default function OreGetting() {
 
           <label>
             <span>Titik Bor</span>
+
             <input
               type="text"
               value={form.titikBor}
@@ -323,6 +353,7 @@ export default function OreGetting() {
 
           <label>
             <span>Block Model</span>
+
             <input
               type="text"
               value={form.blockModel}
@@ -335,6 +366,7 @@ export default function OreGetting() {
 
           <label>
             <span>Elevasi</span>
+
             <input
               type="text"
               value={form.elevasi}
@@ -347,6 +379,7 @@ export default function OreGetting() {
 
           <label>
             <span>Jumlah Sampel</span>
+
             <input
               type="number"
               min="0"
@@ -358,6 +391,7 @@ export default function OreGetting() {
               }
               placeholder="Contoh: 2"
             />
+
             <small>Satuan: inc</small>
           </label>
 
@@ -398,22 +432,39 @@ export default function OreGetting() {
             <tbody>
               {records.length === 0 ? (
                 <tr>
-                  <td colSpan="11" style={{ textAlign: 'center' }}>
+                  <td
+                    colSpan="11"
+                    style={{ textAlign: 'center' }}
+                  >
                     Belum ada data Ore Getting.
                   </td>
                 </tr>
               ) : (
                 records.map((record) => (
-                  <tr key={record.id || record.submissionTimestamp}>
+                  <tr
+                    key={
+                      record.id ||
+                      record.submissionTimestamp
+                    }
+                  >
                     <td>{record.date || '-'}</td>
+
                     <td>{record.areaPit || '-'}</td>
+
                     <td>{record.shift || '-'}</td>
+
                     <td>{record.metode || '-'}</td>
+
                     <td>{record.idMetode || '-'}</td>
+
                     <td>{record.acuan || '-'}</td>
+
                     <td>{record.titikBor || '-'}</td>
+
                     <td>{record.blockModel || '-'}</td>
+
                     <td>{record.elevasi || '-'}</td>
+
                     <td>
                       {record.jumlahSampel !== '' &&
                       record.jumlahSampel !== null &&
@@ -421,6 +472,7 @@ export default function OreGetting() {
                         ? `${record.jumlahSampel} inc`
                         : '-'}
                     </td>
+
                     <td>
                       {formatWitaTimestamp(
                         record.submissionTimestamp ||
