@@ -570,7 +570,11 @@ function oreGettingToRow_(item, submittedAt) {
 }
 
 function getSubmissionTimestamp_() {
-  return Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm');
+  return Utilities.formatDate(
+    new Date(),
+    'Asia/Makassar',
+    'yyyy-MM-dd HH:mm'
+  );
 }
 
 function rowToItem_(row) {
