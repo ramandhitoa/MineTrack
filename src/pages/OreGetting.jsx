@@ -1,9 +1,3 @@
-// ============================================================
-// HALAMAN INPUT LAPORAN ORE GETTING
-// Form input ringkas untuk pencatatan pit, shift, metode, serta
-// referensi titik bor / block model / elevasi sesuai kebutuhan.
-// ============================================================
-
 import { useEffect, useState } from 'react';
 import { areaPitOptions } from '../data/initialData';
 import { DEFAULT_GOOGLE_APPS_SCRIPT_URL } from '../services/googleSheetsService';
@@ -21,87 +15,202 @@ const initialForm = {
   titikBor: '',
   blockModel: '',
   elevasi: '',
+  jumlahSampel: '',
 };
+
+function formatWitaTimestamp(value) {
+  if (!value) return '-';
+
+  // Timestamp dari Apps Script sudah HH:MM WITA.
+  const text = String(value).trim();
+  if (/^\d{1,2}:\d{2}$/.test(text)) {
+    const [hour, minute] = text.split(':');
+    return `${String(hour).padStart(2, '0')}:${minute}`;
+  }
+
+  try {
+    return new Intl.DateTimeFormat('id-ID', {
+      timeZone: 'Asia/Makassar',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    }).format(new Date(value));
+  } catch {
+    return '-';
+  }
+}
 
 export default function OreGetting() {
   const [form, setForm] = useState(() => {
     try {
-      const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
-      if (saved && saved.form) return saved.form;
-    } catch {
-      // ignore parse error
+      const saved = JSON.parse(
+        localStorage.getItem(STORAGE_KEY) || 'null'
+      );
+
+      if (saved && saved.form) {
+        return {
+          ...initialForm,
+          ...saved.form,
+          jumlahSampel: saved.form.jumlahSampel ?? '',
+          metode: saved.form.metode || 'CEK',
+        };
+      }
+    } catch (error) {
+      console.error('Gagal membaca form Ore Getting:', error);
     }
+
     return initialForm;
   });
 
   const [records, setRecords] = useState(() => {
     try {
-      const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
-      return Array.isArray(saved?.records) ? saved.records : [];
-    } catch {
+      const saved = JSON.parse(
+        localStorage.getItem(STORAGE_KEY) || 'null'
+      );
+
+      return Array.isArray(saved?.records)
+        ? saved.records
+        : [];
+    } catch (error) {
+      console.error('Gagal membaca riwayat Ore Getting:', error);
       return [];
     }
   });
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ form, records }));
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({ form, records })
+    );
   }, [form, records]);
 
   const updateField = (key, value) => {
-    setForm((current) => ({ ...current, [key]: value }));
+    setForm((current) => ({
+      ...current,
+      [key]: value,
+    }));
+  };
+
+  const updateJumlahSampel = (value) => {
+    if (value === '') {
+      updateField('jumlahSampel', '');
+      return;
+    }
+
+    if (!/^\d*(\.\d*)?$/.test(value)) {
+      return;
+    }
+
+    updateField('jumlahSampel', value);
   };
 
   const syncOreGettingToGoogleSheets = async (record) => {
-    const gsUrl = localStorage.getItem('minetrack_gsheets_url') || DEFAULT_GOOGLE_APPS_SCRIPT_URL;
+    const gsUrl =
+      localStorage.getItem('minetrack_gsheets_url') ||
+      DEFAULT_GOOGLE_APPS_SCRIPT_URL;
 
-    if (!gsUrl) return;
+    if (!gsUrl) {
+      throw new Error('URL Google Apps Script belum tersedia.');
+    }
 
-    try {
-      const response = await fetch(gsUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'text/plain;charset=utf-8',
-        },
-        body: JSON.stringify({
-          type: 'oregetting',
-          items: [{
+    const response = await fetch(gsUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'text/plain;charset=utf-8',
+      },
+      body: JSON.stringify({
+        type: 'oregetting',
+        items: [
+          {
             ...record,
             date: record.date || toWitaDateInput(),
-            submissionTimestamp: new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Makassar' })).toISOString(),
-          }],
-        }),
-      });
+            submissionTimestamp: record.submissionTimestamp,
+          },
+        ],
+      }),
+    });
 
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
-
-      const result = await response.json();
-      if (result?.success !== true) {
-        throw new Error(result?.message || 'Gagal menyimpan ke Google Sheets');
-      }
-
-      return result;
-    } catch (error) {
-      console.error('Ore Getting sync failed:', error);
-      throw error;
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
     }
+
+    const result = await response.json();
+
+    if (result?.success !== true) {
+      throw new Error(
+        result?.message ||
+          'Gagal menyimpan Ore Getting ke Google Sheets.'
+      );
+    }
+
+    return result;
   };
 
   const handleSubmit = async (event) => {
     event.preventDefault();
-    const timestamp = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Makassar' })).toISOString();
+
+    const jumlahSampelValue =
+      form.jumlahSampel === '' ||
+      form.jumlahSampel === null ||
+      form.jumlahSampel === undefined
+        ? ''
+        : Number(form.jumlahSampel);
+
+    if (
+      form.jumlahSampel !== '' &&
+      !Number.isFinite(jumlahSampelValue)
+    ) {
+      alert('Jumlah Sampel harus berupa angka.');
+      return;
+    }
+
+    if (
+      form.jumlahSampel !== '' &&
+      jumlahSampelValue < 0
+    ) {
+      alert('Jumlah Sampel tidak boleh negatif.');
+      return;
+    }
+
+    const timestamp = new Date().toISOString();
+
     const newRecord = {
       id: Date.now(),
-      ...form,
       date: form.date || toWitaDateInput(),
+      areaPit: form.areaPit,
+      shift: form.shift,
+      metode: form.metode,
+      idMetode: form.idMetode,
+      acuan: form.acuan,
+      titikBor: form.titikBor,
+      blockModel: form.blockModel,
+      elevasi: form.elevasi,
+      jumlahSampel:
+        form.jumlahSampel === ''
+          ? ''
+          : jumlahSampelValue,
       createdAt: timestamp,
       submissionTimestamp: timestamp,
     };
 
-    setRecords((current) => [newRecord, ...current]);
-    await syncOreGettingToGoogleSheets(newRecord);
-    setForm(initialForm);
+    try {
+      await syncOreGettingToGoogleSheets(newRecord);
+
+      setRecords((current) => [newRecord, ...current]);
+
+      setForm({
+        ...initialForm,
+        date: toWitaDateInput(),
+      });
+
+      alert('Laporan Ore Getting berhasil disimpan.');
+    } catch (error) {
+      console.error('Gagal menyimpan Ore Getting:', error);
+      alert(
+        'Data Ore Getting gagal dikirim ke Google Sheets. ' +
+          (error?.message || '')
+      );
+    }
   };
 
   return (
@@ -111,103 +220,154 @@ export default function OreGetting() {
           <h3>Input Laporan Ore Getting</h3>
         </div>
 
-        <form onSubmit={handleSubmit} className="form" style={{ paddingTop: 12 }}>
-          <div className="formGrid4">
-            <div className="fieldHeader">Tanggal</div>
-            <div className="fieldHeader">Area PIT</div>
-            <div className="fieldHeader">Shift</div>
-            <div className="fieldHeader">Metode</div>
+        <form className="formGrid4" onSubmit={handleSubmit}>
+          <label>
+            <span>Tanggal</span>
+            <input
+              type="date"
+              value={form.date}
+              onChange={(event) =>
+                updateField('date', event.target.value)
+              }
+              required
+            />
+          </label>
 
-            <label className="field">
-              <input
-                type="date"
-                value={form.date || ''}
-                onChange={(event) => updateField('date', event.target.value)}
-              />
-            </label>
+          <label>
+            <span>Area PIT</span>
+            <select
+              value={form.areaPit}
+              onChange={(event) =>
+                updateField('areaPit', event.target.value)
+              }
+              required
+            >
+              {areaPitOptions.map((area) => (
+                <option key={area} value={area}>
+                  {area}
+                </option>
+              ))}
+            </select>
+          </label>
 
-            <label className="field">
-              <select value={form.areaPit} onChange={(event) => updateField('areaPit', event.target.value)}>
-                {areaPitOptions.map((pit) => (
-                  <option key={pit} value={pit}>{pit}</option>
-                ))}
-              </select>
-            </label>
+          <label>
+            <span>Shift</span>
+            <select
+              value={form.shift}
+              onChange={(event) =>
+                updateField('shift', event.target.value)
+              }
+              required
+            >
+              <option value="Shift 1 (Siang)">
+                Shift 1 (Siang)
+              </option>
+              <option value="Shift 2 (Malam)">
+                Shift 2 (Malam)
+              </option>
+            </select>
+          </label>
 
-            <label className="field">
-              <select value={form.shift} onChange={(event) => updateField('shift', event.target.value)}>
-                <option>Shift 1 (Siang)</option>
-                <option>Shift 2 (Malam)</option>
-              </select>
-            </label>
+          <label>
+            <span>Metode</span>
+            <select
+              value={form.metode}
+              onChange={(event) =>
+                updateField('metode', event.target.value)
+              }
+              required
+            >
+              <option value="CEK">CEK</option>
+              <option value="PSI">PSI</option>
+              <option value="CH">CH</option>
+              <option value="TP">TP</option>
+              <option value="HS">HS</option>
+            </select>
+          </label>
 
-            <label className="field">
-             <select value={form.metode} onChange={(event) => updateField('metode', event.target.value)}>
-  <option value="PSI">PSI</option>
-  <option value="CEK">CEK</option>
-  <option value="TP">TP</option>
-  <option value="CH">CH</option>
-  <option value="HS">HS</option>
-</select>
-            </label>
-          </div>
+          <label>
+            <span>ID Metode</span>
+            <input
+              type="text"
+              value={form.idMetode}
+              onChange={(event) =>
+                updateField('idMetode', event.target.value)
+              }
+              placeholder="Masukkan ID metode"
+            />
+          </label>
 
-          <div className="formGrid4">
-            <div className="fieldHeader">ID Metode</div>
-            <div className="fieldHeader">Acuan</div>
-            <div className="fieldHeader">Titik Bor</div>
-            <div className="fieldHeader">Block Model</div>
+          <label>
+            <span>Acuan</span>
+            <input
+              type="text"
+              value={form.acuan}
+              onChange={(event) =>
+                updateField('acuan', event.target.value)
+              }
+              placeholder="Masukkan acuan"
+            />
+          </label>
 
-            <label className="field">
-              <input
-                value={form.idMetode}
-                onChange={(event) => updateField('idMetode', event.target.value)}
-                placeholder="Nomor ID metode"
-              />
-            </label>
+          <label>
+            <span>Titik Bor</span>
+            <input
+              type="text"
+              value={form.titikBor}
+              onChange={(event) =>
+                updateField('titikBor', event.target.value)
+              }
+              placeholder="Masukkan titik bor"
+            />
+          </label>
 
-            <label className="field">
-              <input
-                value={form.acuan}
-                onChange={(event) => updateField('acuan', event.target.value)}
-                placeholder="Tulis acuan"
-              />
-            </label>
+          <label>
+            <span>Block Model</span>
+            <input
+              type="text"
+              value={form.blockModel}
+              onChange={(event) =>
+                updateField('blockModel', event.target.value)
+              }
+              placeholder="Masukkan block model"
+            />
+          </label>
 
-            <label className="field">
-              <input
-                value={form.titikBor}
-                onChange={(event) => updateField('titikBor', event.target.value)}
-                placeholder="Titik bor"
-              />
-            </label>
+          <label>
+            <span>Elevasi</span>
+            <input
+              type="text"
+              value={form.elevasi}
+              onChange={(event) =>
+                updateField('elevasi', event.target.value)
+              }
+              placeholder="Masukkan elevasi"
+            />
+          </label>
 
-            <label className="field">
-              <input
-                value={form.blockModel}
-                onChange={(event) => updateField('blockModel', event.target.value)}
-                placeholder="Block model"
-              />
-            </label>
-          </div>
+          <label>
+            <span>Jumlah Sampel</span>
+            <input
+              type="number"
+              min="0"
+              step="any"
+              inputMode="decimal"
+              value={form.jumlahSampel}
+              onChange={(event) =>
+                updateJumlahSampel(event.target.value)
+              }
+              placeholder="Contoh: 2"
+            />
+            <small>Satuan: inc</small>
+          </label>
 
-          <div className="formGrid4" style={{ marginTop: 12 }}>
-            <div className="fieldHeader">Elevasi</div>
-            <div style={{ visibility: 'hidden' }} className="fieldHeader">Spacer</div>
-            <div style={{ visibility: 'hidden' }} className="fieldHeader">Spacer</div>
-            <div style={{ visibility: 'hidden' }} className="fieldHeader">Spacer</div>
+          <div></div>
+          <div></div>
 
-            <label className="field">
-              <input
-                value={form.elevasi}
-                onChange={(event) => updateField('elevasi', event.target.value)}
-                placeholder="Elevasi"
-              />
-            </label>
-          </div>
-
-          <div className="modalFooter" style={{ justifyContent: 'flex-end', paddingTop: 8 }}>
-            <button className="primary" type="submit">Simpan Laporan Ore Getting</button>
+          <div className="formActions">
+            <button className="primary" type="submit">
+              Simpan Laporan
+            </button>
           </div>
         </form>
       </div>
@@ -230,17 +390,21 @@ export default function OreGetting() {
                 <th>Titik Bor</th>
                 <th>Block Model</th>
                 <th>Elevasi</th>
+                <th>Jumlah Sampel</th>
                 <th>Timestamp Pengumpulan</th>
               </tr>
             </thead>
+
             <tbody>
               {records.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="emptyState">Belum ada data ore getting.</td>
+                  <td colSpan="11" style={{ textAlign: 'center' }}>
+                    Belum ada data Ore Getting.
+                  </td>
                 </tr>
               ) : (
                 records.map((record) => (
-                  <tr key={record.id}>
+                  <tr key={record.id || record.submissionTimestamp}>
                     <td>{record.date || '-'}</td>
                     <td>{record.areaPit || '-'}</td>
                     <td>{record.shift || '-'}</td>
@@ -250,7 +414,19 @@ export default function OreGetting() {
                     <td>{record.titikBor || '-'}</td>
                     <td>{record.blockModel || '-'}</td>
                     <td>{record.elevasi || '-'}</td>
-                    <td>{record.submissionTimestamp ? new Intl.DateTimeFormat('id-ID', { timeZone: 'Asia/Makassar', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(record.submissionTimestamp)) : (record.createdAt ? new Intl.DateTimeFormat('id-ID', { timeZone: 'Asia/Makassar', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(record.createdAt)) : '-')}</td>
+                    <td>
+                      {record.jumlahSampel !== '' &&
+                      record.jumlahSampel !== null &&
+                      record.jumlahSampel !== undefined
+                        ? `${record.jumlahSampel} inc`
+                        : '-'}
+                    </td>
+                    <td>
+                      {formatWitaTimestamp(
+                        record.submissionTimestamp ||
+                          record.createdAt
+                      )}
+                    </td>
                   </tr>
                 ))
               )}

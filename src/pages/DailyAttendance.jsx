@@ -1,85 +1,84 @@
-// ============================================================
-// DASHBOARD DAILY ABSENSI
-// Mencatat kehadiran personel berdasarkan tanggal, shift, lokasi kerja,
-// dan foto dokumentasi.
-// ============================================================
-
 import { useEffect, useRef, useState } from 'react';
-import {
-  Camera,
-  CloudUpload,
-  RotateCcw,
-  Trash2,
-  X,
-} from 'lucide-react';
-import {
-  attendanceLocations,
-  attendanceNames,
-  emptyAttendance,
-} from '../data/initialData';
+import { Camera, CloudUpload, X } from 'lucide-react';
+import { attendanceLocations, attendanceNames, emptyAttendance } from '../data/initialData';
 import { dateFmt, fmt } from '../utils/formatters';
 
 const MAX_PHOTO_BYTES = 100 * 1024;
-const INITIAL_PHOTO_WIDTH = 1280;
 
-function canvasToBlob(canvas, quality) {
-  return new Promise((resolve) => {
-    canvas.toBlob(resolve, 'image/jpeg', quality);
+function stopCamera(stream) {
+  if (!stream) return;
+  stream.getTracks().forEach((track) => track.stop());
+}
+
+function blobToDataUrl(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error('Foto tidak dapat diproses.'));
+    reader.readAsDataURL(blob);
   });
 }
 
-async function compressPhoto(video) {
-  const sourceWidth = video.videoWidth;
-  const sourceHeight = video.videoHeight;
+async function compressPhotoTo100Kb(source) {
+  const imageUrl =
+    typeof source === 'string'
+      ? source
+      : URL.createObjectURL(source);
 
-  if (!sourceWidth || !sourceHeight) {
-    throw new Error('Kamera belum siap. Silakan coba ambil foto lagi.');
-  }
+  try {
+    const image = new Image();
 
-  let width = Math.min(sourceWidth, INITIAL_PHOTO_WIDTH);
-  let height = Math.round((sourceHeight / sourceWidth) * width);
+    await new Promise((resolve, reject) => {
+      image.onload = resolve;
+      image.onerror = () => reject(new Error('Foto tidak dapat dibaca.'));
+      image.src = imageUrl;
+    });
 
-  for (let dimensionAttempt = 0; dimensionAttempt < 7; dimensionAttempt += 1) {
+    let width = image.naturalWidth || image.width;
+    let height = image.naturalHeight || image.height;
+
+    const maxDimension = 1280;
+
+    if (Math.max(width, height) > maxDimension) {
+      const ratio = maxDimension / Math.max(width, height);
+      width = Math.round(width * ratio);
+      height = Math.round(height * ratio);
+    }
+
     const canvas = document.createElement('canvas');
-    canvas.width = width;
-    canvas.height = height;
-
-    const context = canvas.getContext('2d');
+    const context = canvas.getContext('2d', { alpha: false });
 
     if (!context) {
-      throw new Error('Browser tidak dapat memproses foto.');
+      throw new Error('Browser tidak mendukung pemrosesan foto.');
     }
 
-    context.drawImage(video, 0, 0, width, height);
+    for (let scaleAttempt = 0; scaleAttempt < 8; scaleAttempt += 1) {
+      canvas.width = width;
+      canvas.height = height;
+      context.drawImage(image, 0, 0, width, height);
 
-    for (let quality = 0.85; quality >= 0.15; quality -= 0.05) {
-      const blob = await canvasToBlob(canvas, quality);
-
-      if (!blob) {
-        continue;
-      }
-
-      if (blob.size <= MAX_PHOTO_BYTES) {
-        const dataUrl = await new Promise((resolve, reject) => {
-          const reader = new FileReader();
-
-          reader.onloadend = () => resolve(reader.result);
-          reader.onerror = () => reject(new Error('Foto gagal diproses.'));
-          reader.readAsDataURL(blob);
+      for (let quality = 0.82; quality >= 0.25; quality -= 0.07) {
+        const blob = await new Promise((resolve) => {
+          canvas.toBlob(resolve, 'image/jpeg', quality);
         });
 
-        return {
-          dataUrl,
-          bytes: blob.size,
-        };
+        if (!blob) continue;
+
+        if (blob.size <= MAX_PHOTO_BYTES) {
+          return await blobToDataUrl(blob);
+        }
       }
+
+      width = Math.round(width * 0.8);
+      height = Math.round(height * 0.8);
     }
 
-    width = Math.round(width * 0.8);
-    height = Math.round(height * 0.8);
+    throw new Error('Foto tidak dapat dikompres sampai maksimal 100 KB.');
+  } finally {
+    if (typeof source !== 'string') {
+      URL.revokeObjectURL(imageUrl);
+    }
   }
-
-  throw new Error('Foto tidak dapat dikompres hingga maksimal 100 KB.');
 }
 
 export default function DailyAttendance({
@@ -88,15 +87,25 @@ export default function DailyAttendance({
   onSyncAttendance,
   syncing,
 }) {
-  const [form, setForm] = useState(emptyAttendance);
+  const [form, setForm] = useState(() => ({
+    ...emptyAttendance,
+    photoDataUrl: '',
+  }));
 
   const [cameraOpen, setCameraOpen] = useState(false);
-  const [cameraError, setCameraError] = useState('');
+  const [cameraLoading, setCameraLoading] = useState(false);
   const [photoProcessing, setPhotoProcessing] = useState(false);
-  const [photoSize, setPhotoSize] = useState(0);
+  const [photoPreview, setPhotoPreview] = useState('');
 
   const videoRef = useRef(null);
   const streamRef = useRef(null);
+
+  useEffect(() => {
+    return () => {
+      stopCamera(streamRef.current);
+      streamRef.current = null;
+    };
+  }, []);
 
   const update = (key, value) => {
     setForm((current) => ({
@@ -105,114 +114,84 @@ export default function DailyAttendance({
     }));
   };
 
-  const stopCamera = () => {
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((track) => track.stop());
-      streamRef.current = null;
-    }
+  const openCamera = async () => {
+    setCameraLoading(true);
 
-    if (videoRef.current) {
-      videoRef.current.srcObject = null;
-    }
-  };
-
-  useEffect(() => {
-    if (!cameraOpen) {
-      stopCamera();
-      return undefined;
-    }
-
-    let cancelled = false;
-
-    const startCamera = async () => {
-      try {
-        setCameraError('');
-
-        if (!navigator.mediaDevices?.getUserMedia) {
-          throw new Error(
-            'Browser ini tidak mendukung akses kamera. Gunakan Chrome atau Edge pada perangkat yang memiliki kamera.'
-          );
-        }
-
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: {
-            facingMode: {
-              ideal: 'environment',
-            },
-            width: {
-              ideal: 1280,
-            },
-            height: {
-              ideal: 720,
-            },
-          },
-          audio: false,
-        });
-
-        if (cancelled) {
-          stream.getTracks().forEach((track) => track.stop());
-          return;
-        }
-
-        streamRef.current = stream;
-
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-          await videoRef.current.play();
-        }
-      } catch (error) {
-        setCameraError(
-          error?.message ||
-            'Kamera tidak dapat dibuka. Pastikan izin kamera diberikan kepada browser.'
+    try {
+      if (!navigator.mediaDevices?.getUserMedia) {
+        throw new Error(
+          'Kamera tidak tersedia. Pastikan aplikasi dibuka melalui HTTPS dan browser mengizinkan kamera.'
         );
       }
-    };
 
-    startCamera();
+      stopCamera(streamRef.current);
 
-    return () => {
-      cancelled = true;
-      stopCamera();
-    };
-  }, [cameraOpen]);
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: { ideal: 'environment' },
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+        },
+        audio: false,
+      });
 
-  useEffect(() => {
-    return () => {
-      stopCamera();
-    };
-  }, []);
+      streamRef.current = stream;
+      setCameraOpen(true);
 
-  const openCamera = () => {
-    setCameraError('');
-    setCameraOpen(true);
+      requestAnimationFrame(() => {
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          videoRef.current.play().catch(() => {});
+        }
+      });
+    } catch (error) {
+      console.error('Kamera gagal dibuka:', error);
+      alert(
+        error?.message ||
+          'Kamera tidak dapat dibuka. Izinkan akses kamera pada browser.'
+      );
+    } finally {
+      setCameraLoading(false);
+    }
   };
 
   const closeCamera = () => {
-    stopCamera();
+    stopCamera(streamRef.current);
+    streamRef.current = null;
     setCameraOpen(false);
-    setCameraError('');
-    setPhotoProcessing(false);
   };
 
   const capturePhoto = async () => {
-    if (!videoRef.current) {
-      setCameraError('Kamera belum siap.');
+    const video = videoRef.current;
+
+    if (!video || !video.videoWidth || !video.videoHeight) {
+      alert('Kamera belum siap. Tunggu beberapa detik lalu coba lagi.');
       return;
     }
 
+    setPhotoProcessing(true);
+
     try {
-      setCameraError('');
-      setPhotoProcessing(true);
+      const canvas = document.createElement('canvas');
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
 
-      const compressed = await compressPhoto(videoRef.current);
+      const context = canvas.getContext('2d', { alpha: false });
+      if (!context) throw new Error('Kamera tidak dapat diproses.');
 
-      update('photoDataUrl', compressed.dataUrl);
-      setPhotoSize(compressed.bytes);
+      context.drawImage(video, 0, 0, canvas.width, canvas.height);
 
+      const rawDataUrl = canvas.toDataURL('image/jpeg', 0.9);
+      const compressedDataUrl = await compressPhotoTo100Kb(rawDataUrl);
+
+      setPhotoPreview(compressedDataUrl);
+      update('photoDataUrl', compressedDataUrl);
       closeCamera();
     } catch (error) {
-      setCameraError(
-        error?.message || 'Foto gagal diproses. Silakan coba lagi.'
+      console.error('Gagal mengambil foto:', error);
+      alert(
+        error?.message ||
+          'Foto gagal diproses. Silakan coba lagi.'
       );
     } finally {
       setPhotoProcessing(false);
@@ -220,195 +199,201 @@ export default function DailyAttendance({
   };
 
   const removePhoto = () => {
+    setPhotoPreview('');
     update('photoDataUrl', '');
-    setPhotoSize(0);
   };
 
-  const save = (event) => {
-    onSaveAttendance(event, form);
+  const save = async (event) => {
+    event.preventDefault();
 
-    setForm({
-      ...emptyAttendance,
-      date: form.date,
-    });
+    try {
+      await onSaveAttendance(event, form);
 
-    setPhotoSize(0);
+      setForm({
+        ...emptyAttendance,
+        date: form.date,
+        photoDataUrl: '',
+      });
+      setPhotoPreview('');
+    } catch (error) {
+      console.error('Gagal menyimpan absensi:', error);
+    }
   };
-
-  const hasPhoto = Boolean(form.photoDataUrl);
 
   return (
     <section className="pageStack">
       <section className="panel attendanceDashboard">
         <div className="panelHead">
           <div>
-            <h2>Dashboard Daily Absensi</h2>
-            <p>
-              Pencatatan kehadiran berdasarkan tanggal, shift, lokasi kerja,
-              dan nama personel
-            </p>
+            <h3>Daily Absensi</h3>
           </div>
 
-          <div className="attendanceActions">
-            <span className="attendanceCount">
-              {fmt(attendance.length)} Data
-            </span>
-
-            <button
-              type="button"
-              onClick={onSyncAttendance}
-              disabled={syncing}
-            >
-              <CloudUpload size={14} />
-              {syncing ? 'Menyinkronkan...' : 'Sync Google Sheets'}
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={onSyncAttendance}
+            disabled={syncing}
+          >
+            <CloudUpload size={14} />
+            {syncing ? 'Sinkronisasi...' : 'Sinkronkan'}
+          </button>
         </div>
 
         <form className="attendanceForm" onSubmit={save}>
           <label>
-            Tanggal / Hari / Bulan / Tahun
+            <span>Tanggal</span>
             <input
               type="date"
-              value={form.date}
-              onChange={(event) => update('date', event.target.value)}
+              value={form.date || ''}
+              onChange={(event) =>
+                update('date', event.target.value)
+              }
               required
             />
           </label>
 
           <label>
-            Shift
+            <span>Shift</span>
             <select
-              value={form.shift}
-              onChange={(event) => update('shift', event.target.value)}
+              value={form.shift || ''}
+              onChange={(event) =>
+                update('shift', event.target.value)
+              }
+              required
             >
-              <option>Shift 1</option>
-              <option>Shift 2</option>
+              <option value="Shift 1 (Siang)">
+                Shift 1 (Siang)
+              </option>
+              <option value="Shift 2 (Malam)">
+                Shift 2 (Malam)
+              </option>
             </select>
           </label>
 
           <label>
-            Lokasi Kerja
+            <span>Lokasi Kerja</span>
             <select
-              value={form.location}
-              onChange={(event) => update('location', event.target.value)}
+              value={form.location || ''}
+              onChange={(event) =>
+                update('location', event.target.value)
+              }
+              required
             >
+              <option value="">Pilih lokasi kerja</option>
               {attendanceLocations.map((location) => (
-                <option key={location}>{location}</option>
+                <option key={location} value={location}>
+                  {location}
+                </option>
               ))}
             </select>
           </label>
 
           <label>
-            Nama
+            <span>Nama</span>
             <select
-              value={form.name}
-              onChange={(event) => update('name', event.target.value)}
+              value={form.name || ''}
+              onChange={(event) =>
+                update('name', event.target.value)
+              }
+              required
             >
+              <option value="">Pilih nama</option>
               {attendanceNames.map((name) => (
-                <option key={name}>{name}</option>
+                <option key={name} value={name}>
+                  {name}
+                </option>
               ))}
             </select>
           </label>
 
-          <div
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '10px',
-            }}
-          >
-            <strong>Foto</strong>
+          <div className="attendancePhotoBox">
+            <div>
+              <strong>Foto Absensi</strong>
+              <small>
+                Foto dikompres otomatis maksimal 100 KB.
+              </small>
+            </div>
 
-            {!hasPhoto ? (
+            {!photoPreview ? (
               <button
-                className="primary"
                 type="button"
+                className="primary"
                 onClick={openCamera}
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '8px',
-                  width: 'fit-content',
-                }}
+                disabled={cameraLoading || photoProcessing}
               >
                 <Camera size={16} />
-                Ambil Foto
+                {cameraLoading ? 'Membuka Kamera...' : 'Ambil Foto'}
               </button>
             ) : (
-              <div
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '10px',
-                  maxWidth: '420px',
-                }}
-              >
+              <div className="attendancePhotoPreview">
                 <img
-                  src={form.photoDataUrl}
+                  src={photoPreview}
                   alt="Preview foto absensi"
-                  style={{
-                    display: 'block',
-                    width: '100%',
-                    maxHeight: '300px',
-                    objectFit: 'cover',
-                    borderRadius: '10px',
-                    border: '1px solid #ddd',
-                  }}
                 />
 
-                <div
-                  style={{
-                    display: 'flex',
-                    flexWrap: 'wrap',
-                    alignItems: 'center',
-                    gap: '8px',
-                  }}
+                <button
+                  type="button"
+                  onClick={removePhoto}
                 >
-                  <span style={{ fontSize: '13px' }}>
-                    Foto siap
-                    {photoSize
-                      ? ` (${Math.ceil(photoSize / 1024)} KB)`
-                      : ''}
-                  </span>
-
-                  <button
-                    type="button"
-                    onClick={openCamera}
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '6px',
-                    }}
-                  >
-                    <RotateCcw size={15} />
-                    Ambil Ulang
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={removePhoto}
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '6px',
-                    }}
-                  >
-                    <Trash2 size={15} />
-                    Hapus
-                  </button>
-                </div>
+                  <X size={14} />
+                  Ganti Foto
+                </button>
               </div>
             )}
           </div>
 
-          <button className="primary" type="submit">
+          <button
+            className="primary"
+            type="submit"
+            disabled={photoProcessing || cameraOpen}
+          >
             Simpan Absensi
           </button>
         </form>
 
-        <div className="tableWrap attendanceTable">
+        {cameraOpen && (
+          <div
+            className="cameraModal"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Kamera absensi"
+          >
+            <div className="cameraModalContent">
+              <div className="cameraModalHead">
+                <strong>Ambil Foto Absensi</strong>
+                <button
+                  type="button"
+                  onClick={closeCamera}
+                  disabled={photoProcessing}
+                  aria-label="Tutup kamera"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              <video
+                ref={videoRef}
+                autoPlay
+                playsInline
+                muted
+                className="cameraPreview"
+              />
+
+              <button
+                type="button"
+                className="primary cameraCaptureButton"
+                onClick={capturePhoto}
+                disabled={photoProcessing}
+              >
+                <Camera size={18} />
+                {photoProcessing
+                  ? 'Mengompres Foto...'
+                  : 'Ambil Foto'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        <div className="tableWrap">
           <table>
             <thead>
               <tr>
@@ -416,163 +401,55 @@ export default function DailyAttendance({
                 <th>Shift</th>
                 <th>Lokasi Kerja</th>
                 <th>Nama</th>
+                <th>Timestamp Pengumpulan</th>
+                <th>Foto</th>
               </tr>
             </thead>
 
             <tbody>
               {attendance.length === 0 ? (
                 <tr>
-                  <td colSpan="4" className="emptyState">
+                  <td colSpan="6" style={{ textAlign: 'center' }}>
                     Belum ada data absensi.
                   </td>
                 </tr>
               ) : (
-                attendance.map((item) => (
-                  <tr key={item.id}>
-                    <td>{dateFmt(item.date)}</td>
-                    <td>
-                      <span className="pill">{item.shift}</span>
-                    </td>
-                    <td>
-                      <b>{item.location}</b>
-                    </td>
-                    <td>{item.name}</td>
-                  </tr>
-                ))
+                attendance.map((item) => {
+                  const photo =
+                    item.photo ||
+                    item.foto ||
+                    item.photoUrl ||
+                    item.photoDataUrl ||
+                    '';
+
+                  return (
+                    <tr key={item.id}>
+                      <td>{dateFmt(item.date)}</td>
+                      <td>{item.shift || '-'}</td>
+                      <td>{item.location || '-'}</td>
+                      <td>{item.name || '-'}</td>
+                      <td>{item.submissionTimestamp || '-'}</td>
+                      <td>
+                        {photo ? (
+                          <a
+                            href={photo}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            Lihat Foto
+                          </a>
+                        ) : (
+                          '-'
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
         </div>
       </section>
-
-      {cameraOpen && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-label="Ambil foto absensi"
-          style={{
-            position: 'fixed',
-            inset: 0,
-            zIndex: 9999,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '16px',
-            background: 'rgba(0, 0, 0, 0.75)',
-          }}
-        >
-          <div
-            style={{
-              width: '100%',
-              maxWidth: '600px',
-              maxHeight: '95vh',
-              overflow: 'auto',
-              background: '#fff',
-              borderRadius: '14px',
-              padding: '16px',
-              boxSizing: 'border-box',
-            }}
-          >
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                marginBottom: '12px',
-              }}
-            >
-              <strong>Ambil Foto Absensi</strong>
-
-              <button
-                type="button"
-                onClick={closeCamera}
-                aria-label="Tutup kamera"
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  padding: '6px',
-                }}
-              >
-                <X size={20} />
-              </button>
-            </div>
-
-            <div
-              style={{
-                position: 'relative',
-                width: '100%',
-                background: '#000',
-                borderRadius: '10px',
-                overflow: 'hidden',
-              }}
-            >
-              <video
-                ref={videoRef}
-                autoPlay
-                muted
-                playsInline
-                style={{
-                  display: 'block',
-                  width: '100%',
-                  maxHeight: '65vh',
-                  objectFit: 'cover',
-                }}
-              />
-
-              {cameraError && (
-                <div
-                  style={{
-                    position: 'absolute',
-                    inset: 0,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    padding: '20px',
-                    textAlign: 'center',
-                    color: '#fff',
-                    background: 'rgba(0, 0, 0, 0.65)',
-                  }}
-                >
-                  {cameraError}
-                </div>
-              )}
-            </div>
-
-            <div
-              style={{
-                display: 'flex',
-                justifyContent: 'center',
-                gap: '10px',
-                marginTop: '14px',
-              }}
-            >
-              <button
-                type="button"
-                onClick={closeCamera}
-              >
-                Batal
-              </button>
-
-              <button
-                className="primary"
-                type="button"
-                onClick={capturePhoto}
-                disabled={photoProcessing || Boolean(cameraError)}
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '8px',
-                }}
-              >
-                <Camera size={18} />
-                {photoProcessing ? 'Memproses...' : 'Jepret Foto'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </section>
   );
 }
