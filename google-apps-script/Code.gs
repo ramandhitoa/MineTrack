@@ -1984,7 +1984,9 @@ function saveProduction_(
 // SAVE ORE GETTING
 // ============================================================
 // BAGIAN INI DIPERTAHANKAN.
-// TIMESTAMP ORE GETTING TETAP ISO STRING.
+// TIMESTAMP ORE GETTING DIBUAT OLEH SERVER
+// DALAM ZONA ASIA/MAKASSAR / WITA.
+// FORMAT: HH:mm
 // ============================================================
 
 function saveOreGetting_(
@@ -2694,12 +2696,11 @@ function oreGettingToRow_(
 
   var today =
     item.date ||
-    new Date()
-      .toISOString()
-      .slice(
-        0,
-        10
-      );
+    Utilities.formatDate(
+      new Date(),
+      'Asia/Makassar',
+      'yyyy-MM-dd'
+    );
 
 
   return [
