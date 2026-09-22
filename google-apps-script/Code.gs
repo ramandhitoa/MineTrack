@@ -22,7 +22,8 @@
 //
 // PRODUKSI & ORE GETTING:
 // - Struktur dipertahankan
-// - Timestamp tetap menggunakan ISO string
+// - Timestamp dibuat oleh server dalam zona Asia/Makassar / WITA
+// - Format timestamp HH:mm
 // ============================================================
 
 
@@ -2053,15 +2054,7 @@ function saveOreGetting_(
 
 
           row.push(
-            item.length >=
-              ORE_GETTING_HEADERS.length
-
-              ? item[
-                  ORE_GETTING_HEADERS.length - 1
-                ] ||
-                submittedAt
-
-              : submittedAt
+            submittedAt
           );
 
 
@@ -2501,16 +2494,18 @@ function ensureHeaders_(
 // ============================================================
 // TIMESTAMP PRODUKSI & ORE GETTING
 // ============================================================
-// TETAP ISO STRING.
-// JANGAN DIUBAH.
-//
-// Contoh:
-// 2026-09-18T06:37:47.196Z
+// Format : HH:MM
+// Zona   : Asia/Makassar / WITA
+// Timestamp dibuat oleh server Apps Script.
 // ============================================================
 
 function getSubmissionTimestamp_() {
 
-  return new Date().toISOString();
+  return Utilities.formatDate(
+    new Date(),
+    'Asia/Makassar',
+    'HH:mm'
+  );
 
 }
 
@@ -2681,8 +2676,7 @@ function itemToRow_(
       item.reporter ||
       '',
 
-    item.submissionTimestamp ||
-      submittedAt
+    submittedAt
 
   ];
 
@@ -2737,10 +2731,7 @@ function oreGettingToRow_(
     item.elevasi ||
       '',
 
-    item.submissionTimestamp ||
-      item.createdAt ||
-      item.timestamp ||
-      submittedAt
+    submittedAt
 
   ];
 
