@@ -6,6 +6,13 @@
 // ============================================================
 
 import { useEffect, useMemo, useState } from 'react';
+import { startOfflineAutoSync } from './services/offlineSync';
+
+import {
+  savePendingData,
+  getPendingData,
+  deletePendingData,
+} from './services/offlineDB';
 import Layout from './components/Layout';
 import { DailyModal, PendingModal, ScriptModal } from './components/Modals';
 import Dashboard from './pages/Dashboard';
@@ -198,6 +205,43 @@ export default function App() {
     return () => { cancelled = true; };
   }, [gsUrl]);
 
+  // ============================================================
+  // OFFLINE AUTO SYNC
+  // Memulai mekanisme sinkronisasi IndexedDB secara global.
+  // Saat internet kembali, offlineSync.js akan memeriksa queue
+  // pendingData dan mengirim data yang masih berstatus pending.
+  // ============================================================
+  useEffect(() => {
+    if (!gsUrl) return undefined;
+
+    const stopAutoSync = startOfflineAutoSync(gsUrl);
+
+    return () => {
+      if (typeof stopAutoSync === 'function') {
+        stopAutoSync();
+      }
+    };
+  }, [gsUrl]);
+
+  // Status koneksi browser.
+  useEffect(() => {
+    const handleOffline = () => {
+      setGsStatus('Offline • data baru akan disimpan di perangkat');
+    };
+
+    const handleOnline = () => {
+      setGsStatus('Online • memeriksa data yang menunggu sinkronisasi...');
+    };
+
+    window.addEventListener('offline', handleOffline);
+    window.addEventListener('online', handleOnline);
+
+    return () => {
+      window.removeEventListener('offline', handleOffline);
+      window.removeEventListener('online', handleOnline);
+    };
+  }, []);
+
   const notify = (message) => {
     setAlert(message);
     window.setTimeout(() => setAlert(''), 4500);
@@ -270,27 +314,62 @@ export default function App() {
     return Object.entries(summary).map(([name, value]) => ({ name, value }));
   }, [logs]);
 
-  const autoSyncProduction = async (nextLogs, message) => {
-    if (!gsUrl) return;
+  // ============================================================
+  // AUTO SYNC PRODUCTION
+  // Mengirim data Production ke Google Sheets.
+  // Jika berhasil, data yang berasal dari IndexedDB dihapus.
+  // ============================================================
+  const autoSyncProduction = async (
+    itemsToSync,
+    message,
+    offlineIds = []
+  ) => {
+    if (!gsUrl || !itemsToSync || !itemsToSync.length) {
+      return;
+    }
 
     setGsLoading(true);
     setGsStatus('Menyinkronkan laporan produksi...');
+
     try {
-      await syncLogsToGoogleSheets(gsUrl, nextLogs);
+      // Kirim data Production ke Google Sheets
+      await syncLogsToGoogleSheets(gsUrl, itemsToSync);
+
+      // Hapus dari IndexedDB HANYA setelah proses kirim berhasil
+      for (const offlineId of offlineIds) {
+        try {
+          await deletePendingData(offlineId);
+        } catch (deleteError) {
+          console.warn(
+            'Gagal menghapus data Production dari IndexedDB:',
+            offlineId,
+            deleteError
+          );
+        }
+      }
+
+      // Baca ulang Google Sheets untuk memastikan data sudah masuk
       const sharedLogs = await readLogsFromGoogleSheets(gsUrl);
+
       setLogs(sharedLogs);
       setGsRemoteCount(sharedLogs.length);
       setGsStatus(`Terhubung • ${sharedLogs.length} baris`);
       notify(message);
     } catch (error) {
       setGsStatus(`Gagal • ${error.message}`);
-      notify(`Data tersimpan di perangkat, tetapi gagal sinkron ke Google Sheets: ${error.message}`);
+      notify(
+        `Data tersimpan di perangkat, tetapi gagal sinkron ke Google Sheets: ${error.message}`
+      );
     } finally {
       setGsLoading(false);
     }
   };
 
-  const autoSyncAttendance = async (newAttendanceItems, message) => {
+  const autoSyncAttendance = async (
+    newAttendanceItems,
+    message,
+    offlineIds = []
+  ) => {
     if (!gsUrl) return;
 
     const cleanAttendance = mergeAttendanceItems(newAttendanceItems || []);
@@ -304,6 +383,20 @@ export default function App() {
     setGsStatus('Menyinkronkan Daily Absensi...');
     try {
       await syncAttendanceToGoogleSheets(gsUrl, cleanAttendance);
+
+      // Hapus queue IndexedDB hanya setelah Google Sheets menerima data.
+      for (const offlineId of offlineIds) {
+        try {
+          await deletePendingData(offlineId);
+        } catch (deleteError) {
+          console.warn(
+            'Gagal menghapus data Daily Absensi dari IndexedDB:',
+            offlineId,
+            deleteError
+          );
+        }
+      }
+
       const sharedAttendance = await readAttendanceFromGoogleSheets(gsUrl);
       setAttendance(mergeAttendanceItems(sharedAttendance));
       setGsStatus(`Absensi tersinkronisasi • ${cleanAttendance.length} baris`);
@@ -341,10 +434,39 @@ export default function App() {
     };
 
     const nextLogs = [newLog, ...logs];
-    setLogs(nextLogs);
-    setDailyForm({ ...emptyDaily, date: toWitaDateInput() });
-    setDailyOpen(false);
-    await autoSyncProduction(nextLogs, 'Laporan produksi berhasil disimpan dan disinkronkan.');
+
+setLogs(nextLogs);
+setDailyForm({ ...emptyDaily, date: toWitaDateInput() });
+setDailyOpen(false);
+
+// ========================================================
+// SIMPAN DATA BARU KE INDEXEDDB
+// ========================================================
+const offlineData = await savePendingData(
+  'production',
+  newLog
+);
+
+// ========================================================
+// JIKA ONLINE → LANGSUNG SYNC
+// JIKA OFFLINE → TETAP MENUNGGU DI INDEXEDDB
+// ========================================================
+if (navigator.onLine && gsUrl) {
+  await autoSyncProduction(
+    [newLog],
+    'Laporan produksi berhasil disimpan dan disinkronkan.',
+    [offlineData.id]
+  );
+} else {
+  setGsStatus(
+    'Offline • Data produksi disimpan di perangkat'
+  );
+
+  notify(
+    'Data produksi disimpan di perangkat dan menunggu sinkronisasi.'
+  );
+}
+
   };
 
   // -------------------- Pending job CRUD --------------------
@@ -394,7 +516,31 @@ export default function App() {
 
     const nextAttendance = mergeAttendanceItems([candidate, ...attendance]);
     setAttendance(nextAttendance);
-    await autoSyncAttendance([candidate], 'Data Daily Absensi berhasil disimpan dan disinkronkan.');
+
+    // Selalu simpan ke IndexedDB terlebih dahulu.
+    // Jika offline, data tetap aman di perangkat.
+    const offlineData = await savePendingData(
+      'attendance',
+      candidate
+    );
+
+    // Jika online, langsung kirim ke Google Sheets.
+    // Jika gagal, item tetap berada di IndexedDB untuk retry otomatis.
+    if (navigator.onLine && gsUrl) {
+      await autoSyncAttendance(
+        [candidate],
+        'Data Daily Absensi berhasil disimpan dan disinkronkan.',
+        [offlineData.id]
+      );
+    } else {
+      setGsStatus(
+        'Offline • Data Daily Absensi disimpan di perangkat'
+      );
+
+      notify(
+        'Data Daily Absensi disimpan di perangkat dan menunggu sinkronisasi.'
+      );
+    }
   };
 
   // -------------------- Clipboard / CSV / Google Sheets --------------------
@@ -417,41 +563,51 @@ export default function App() {
     await loadGoogleSheets(true);
   };
 
-  const syncGoogleSheets = async () => {
-    if (!gsUrl) {
-      setActiveTab('excel');
-      notify('Harap masukkan URL Web App Google Apps Script terlebih dahulu.');
-      return;
-    }
+const syncGoogleSheets = async () => {
+  if (!gsUrl) {
+    setActiveTab('excel');
+    notify('Harap masukkan URL Web App Google Apps Script terlebih dahulu.');
+    return;
+  }
 
-    setGsLoading(true);
-    setGsStatus('Memeriksa data Google Sheets...');
-    try {
-      // Baca Google Sheets terlebih dahulu. Ini mencegah kondisi berbahaya
-      // ketika Sheet memiliki 5 baris tetapi browser lokal hanya memiliki 3.
-      const remoteLogs = await readLogsFromGoogleSheets(gsUrl);
+  setGsLoading(true);
+  setGsStatus('Memeriksa data Google Sheets...');
 
-      if (remoteLogs.length > logs.length) {
-        // Google Sheets lebih lengkap -> ambil data Sheet, JANGAN overwrite.
-        setLogs(remoteLogs);
-        setGsRemoteCount(remoteLogs.length);
-        setGsStatus(`Terhubung • ${remoteLogs.length} baris`);
-        notify(`Data Google Sheets dipakai sebagai sumber utama: ${remoteLogs.length} baris.`);
-      } else {
-        // Browser memiliki data yang sama/lebih baru -> kirim ke Sheet lalu baca ulang.
-        const verifiedLogs = await syncLogsToGoogleSheets(gsUrl, logs);
-        setLogs(verifiedLogs);
-        setGsRemoteCount(verifiedLogs.length);
-        setGsStatus(`Terhubung • ${verifiedLogs.length} baris`);
-        notify(`Sinkronisasi berhasil: ${verifiedLogs.length} baris.`);
-      }
-    } catch (error) {
-      setGsStatus(`Gagal • ${error.message}`);
-      notify(`Gagal sinkronisasi: ${error.message}`);
-    } finally {
-      setGsLoading(false);
+  try {
+    // Baca Google Sheets terlebih dahulu
+    const remoteLogs = await readLogsFromGoogleSheets(gsUrl);
+
+    if (remoteLogs.length > logs.length) {
+      // Google Sheets lebih lengkap
+      setLogs(remoteLogs);
+      setGsRemoteCount(remoteLogs.length);
+      setGsStatus(`Terhubung • ${remoteLogs.length} baris`);
+
+      notify(
+        `Data Google Sheets dipakai sebagai sumber utama: ${remoteLogs.length} baris.`
+      );
+    } else {
+      // Browser memiliki data sama/lebih baru
+      const verifiedLogs = await syncLogsToGoogleSheets(gsUrl, logs);
+
+      setLogs(verifiedLogs);
+      setGsRemoteCount(verifiedLogs.length);
+      setGsStatus(`Terhubung • ${verifiedLogs.length} baris`);
+
+      notify(
+        `Sinkronisasi berhasil: ${verifiedLogs.length} baris.`
+      );
     }
-  };
+  } catch (error) {
+    setGsStatus(`Gagal • ${error.message}`);
+
+    notify(
+      `Sinkronisasi gagal: ${error.message}`
+    );
+  } finally {
+    setGsLoading(false);
+  }
+};
 
   const syncAttendance = async () => {
     if (!gsUrl) {
@@ -479,6 +635,31 @@ export default function App() {
     setGsStatus('Mengirim data Daily Absensi...');
     try {
       await syncAttendanceToGoogleSheets(gsUrl, unsyncedAttendance);
+
+      // Bersihkan queue IndexedDB yang cocok dengan data absensi
+      // yang baru saja berhasil dikirim.
+      const pendingItems = await getPendingData();
+      const syncedKeys = new Set(
+        unsyncedAttendance.map((item) => attendanceKey(item))
+      );
+
+      for (const item of pendingItems) {
+        if (
+          item.type === 'attendance' &&
+          syncedKeys.has(attendanceKey(item.payload))
+        ) {
+          try {
+            await deletePendingData(item.id);
+          } catch (deleteError) {
+            console.warn(
+              'Gagal menghapus queue absensi:',
+              item.id,
+              deleteError
+            );
+          }
+        }
+      }
+
       const sharedAttendance = await readAttendanceFromGoogleSheets(gsUrl);
       setAttendance(mergeAttendanceItems(sharedAttendance));
       setGsStatus(`Absensi tersinkronisasi • ${unsyncedAttendance.length} baris`);
@@ -600,6 +781,6 @@ export default function App() {
           onClose={() => setScriptOpen(false)}
         />
       )}
-    </>
-  );
+     </>
+);
 }

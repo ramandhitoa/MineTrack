@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { areaPitOptions } from '../data/initialData';
 import { DEFAULT_GOOGLE_APPS_SCRIPT_URL } from '../services/googleSheetsService';
 import { toWitaDateInput } from '../utils/formatters';
+import { savePendingData, deletePendingData } from '../services/offlineDB';
 
 const STORAGE_KEY = 'mineTrack_ore_getting_records';
 
@@ -215,8 +216,17 @@ export default function OreGetting() {
     };
 
     try {
-      await syncOreGettingToGoogleSheets(newRecord);
+      // ========================================================
+      // SELALU SIMPAN TERLEBIH DAHULU KE INDEXEDDB
+      // Jika internet putus, data tetap aman di perangkat.
+      // offlineSync.js akan mengirim data saat internet kembali.
+      // ========================================================
+      const offlineData = await savePendingData(
+        'oregetting',
+        newRecord
+      );
 
+      // Tampilkan data langsung di riwayat lokal.
       setRecords((current) => [newRecord, ...current]);
 
       setForm({
@@ -224,12 +234,40 @@ export default function OreGetting() {
         date: toWitaDateInput(),
       });
 
-      alert('Laporan Ore Getting berhasil disimpan.');
+      // ========================================================
+      // JIKA ONLINE → COBA KIRIM LANGSUNG
+      // JIKA GAGAL → DATA TETAP DI INDEXEDDB UNTUK AUTO SYNC
+      // ========================================================
+      if (navigator.onLine) {
+        try {
+          await syncOreGettingToGoogleSheets(newRecord);
+
+          // Hapus dari antrean hanya setelah Google Sheets sukses.
+          await deletePendingData(offlineData.id);
+
+          alert('Laporan Ore Getting berhasil disimpan dan disinkronkan.');
+        } catch (syncError) {
+          console.warn(
+            'Ore Getting tersimpan di perangkat, tetapi sinkronisasi langsung gagal:',
+            syncError
+          );
+
+          alert(
+            'Laporan Ore Getting tersimpan di perangkat dan menunggu sinkronisasi.\n\n' +
+              'Internet/Google Sheets belum dapat dihubungi. Data tidak hilang.'
+          );
+        }
+      } else {
+        alert(
+          'Laporan Ore Getting tersimpan di perangkat dan menunggu sinkronisasi.\n\n' +
+            'Saat internet kembali, data akan dikirim otomatis.'
+        );
+      }
     } catch (error) {
-      console.error('Gagal menyimpan Ore Getting:', error);
+      console.error('Gagal menyimpan Ore Getting ke perangkat:', error);
 
       alert(
-        'Data Ore Getting gagal dikirim ke Google Sheets. ' +
+        'Data Ore Getting gagal disimpan ke perangkat. ' +
           (error?.message || '')
       );
     }
