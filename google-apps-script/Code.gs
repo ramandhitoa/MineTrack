@@ -94,6 +94,8 @@ const ATTENDANCE_HEADERS = [
   'Shift',
   'Lokasi Kerja',
   'Nama',
+  'Penanggung Jawab',
+  'Pembahasan',
   'Timestamp Pengumpulan'
 ];
 
@@ -147,7 +149,7 @@ function doGet(e) {
 
       var attendanceLastColumn =
         Math.max(
-          5,
+          ATTENDANCE_HEADERS.length,
           attendanceSheet.getLastColumn()
         );
 
@@ -560,7 +562,7 @@ function saveAttendance_(payload) {
             2,
             1,
             sheet.getLastRow() - 1,
-            5
+            ATTENDANCE_HEADERS.length
           )
           .getValues();
     }
@@ -640,7 +642,10 @@ function saveAttendance_(payload) {
             item[0] || '',
             item[1] || '',
             item[2] || '',
-            item[3] || ''
+            item[3] || '',
+            item[4] || '',
+            item[5] || '',
+            item[6] || ''
           ];
 
         }
@@ -667,7 +672,19 @@ function saveAttendance_(payload) {
 
             item.name ||
               item.nama ||
-              ''
+              '',
+
+            item.penanggungJawab ||
+              item.penanggungjawab ||
+              item['Penanggung Jawab'] ||
+              '',
+
+            item.pembahasan ||
+              item['Pembahasan'] ||
+              item.topik ||
+              '',
+
+            ''
           ];
 
         }
@@ -686,11 +703,19 @@ function saveAttendance_(payload) {
         var name =
           String(row[3] || '').trim().toLowerCase().replace(/\s+/g, ' ');
 
+        var penanggungJawab =
+          String(row[4] || '').trim().replace(/\s+/g, ' ');
+
+        var pembahasan =
+          String(row[5] || '').trim();
+
 
         if (
           !date ||
           !shift ||
-          !name
+          !name ||
+          !penanggungJawab ||
+          !pembahasan
         ) {
 
           invalidCount++;
@@ -761,6 +786,10 @@ function saveAttendance_(payload) {
             name
           ).trim(),
 
+          penanggungJawab,
+
+          pembahasan,
+
           submittedAt
         ];
 
@@ -821,7 +850,7 @@ function saveAttendance_(payload) {
         startRow,
         1,
         newRows.length,
-        5
+        ATTENDANCE_HEADERS.length
       )
       .setValues(
         newRows
@@ -1179,25 +1208,47 @@ function dedupeAttendanceRowsForDisplay_(
 
 
       // ----------------------------------------------------
-      // TIMESTAMP
+      // FIELD BARU DAILY ABSENSI
       // ----------------------------------------------------
+
+      var penanggungJawab =
+        String(row[4] || '').trim();
+
+      var pembahasan =
+        String(row[5] || '').trim();
 
       var timestamp =
-        row[4] || '';
+        row[6] || '';
 
 
       // ----------------------------------------------------
-      // SUPPORT SHEET LAMA 6 KOLOM
+      // SUPPORT SHEET LAMA 5 KOLOM / 6 KOLOM
       // ----------------------------------------------------
 
       if (
+        row.length >= 5 &&
+        row[4] &&
+        !row[6]
+      ) {
+
+        timestamp =
+          row[4];
+
+        penanggungJawab =
+          '';
+      }
+
+      if (
         row.length >= 6 &&
-        row[5]
+        row[5] &&
+        !row[6]
       ) {
 
         timestamp =
           row[5];
 
+        pembahasan =
+          '';
       }
 
 
@@ -1229,6 +1280,14 @@ function dedupeAttendanceRowsForDisplay_(
 
           String(
             name
+          ).trim(),
+
+          String(
+            penanggungJawab
+          ).trim(),
+
+          String(
+            pembahasan
           ).trim(),
 
           String(

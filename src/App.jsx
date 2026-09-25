@@ -486,16 +486,34 @@ if (navigator.onLine && gsUrl) {
   const saveAttendance = async (event, form) => {
     event.preventDefault();
 
-    const candidate = {
+    const selectedNames = Array.isArray(form.selectedNames)
+      ? form.selectedNames
+      : [form.name].filter(Boolean);
+
+    const cleanedNames = [...new Set(
+      selectedNames
+        .map((name) => String(name || '').trim())
+        .filter(Boolean)
+    )];
+
+    if (!cleanedNames.length) {
+      notify('Pilih minimal satu nama untuk menyimpan absensi.');
+      return;
+    }
+
+    const basePayload = {
       ...form,
       date: String(form.date || '').trim(),
       shift: String(form.shift || '').trim(),
-      name: String(form.name || '').trim(),
-      id: Date.now(),
+      location: String(form.location || '').trim(),
+      penanggungJawab: String(form.penanggungJawab || '').trim().replace(/\s+/g, ' '),
+      pembahasan: String(form.pembahasan || '').trim(),
     };
 
-    // Harus konsisten dengan key server-side Apps Script: tanggal + nama.
-    const candidateKey = attendanceKey(candidate);
+    if (!basePayload.penanggungJawab || !basePayload.pembahasan) {
+      notify('Penanggung Jawab dan Pembahasan wajib diisi sebelum menyimpan absensi.');
+      return;
+    }
 
     let remoteAttendance = [];
     if (gsUrl) {
@@ -507,30 +525,48 @@ if (navigator.onLine && gsUrl) {
     }
 
     const existing = mergeAttendanceItems([...attendance, ...remoteAttendance]);
-    const alreadyExists = existing.some((item) => attendanceKey(item) === candidateKey);
+    const candidates = [];
+    const seenKeys = new Set();
 
-    if (alreadyExists || !candidateKey) {
+    cleanedNames.forEach((name, index) => {
+      const candidate = {
+        ...basePayload,
+        name: String(name).trim(),
+        id: Date.now() + index,
+      };
+
+      const candidateKey = attendanceKey(candidate);
+      if (!candidateKey || seenKeys.has(candidateKey)) {
+        return;
+      }
+
+      if (existing.some((item) => attendanceKey(item) === candidateKey)) {
+        return;
+      }
+
+      seenKeys.add(candidateKey);
+      candidates.push(candidate);
+    });
+
+    if (!candidates.length) {
       notify('Absensi untuk nama, tanggal, dan shift ini sudah ada atau data belum valid. Data tidak dikirim ulang.');
       return;
     }
 
-    const nextAttendance = mergeAttendanceItems([candidate, ...attendance]);
+    const nextAttendance = mergeAttendanceItems([...candidates, ...attendance]);
     setAttendance(nextAttendance);
 
-    // Selalu simpan ke IndexedDB terlebih dahulu.
-    // Jika offline, data tetap aman di perangkat.
-    const offlineData = await savePendingData(
-      'attendance',
-      candidate
-    );
+    const offlineIds = [];
+    for (const candidate of candidates) {
+      const offlineData = await savePendingData('attendance', candidate);
+      offlineIds.push(offlineData.id);
+    }
 
-    // Jika online, langsung kirim ke Google Sheets.
-    // Jika gagal, item tetap berada di IndexedDB untuk retry otomatis.
     if (navigator.onLine && gsUrl) {
       await autoSyncAttendance(
-        [candidate],
+        candidates,
         'Data Daily Absensi berhasil disimpan dan disinkronkan.',
-        [offlineData.id]
+        offlineIds
       );
     } else {
       setGsStatus(

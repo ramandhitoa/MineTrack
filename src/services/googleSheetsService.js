@@ -59,6 +59,12 @@ export function mergeAttendanceItems(items = []) {
       date: normalizeAttendanceValue(item.date || item.tanggal || ''),
       shift: normalizeAttendanceValue(item.shift || ''),
       name: normalizeAttendanceValue(item.name || item.nama || ''),
+      penanggungJawab: normalizeAttendanceValue(
+        item.penanggungJawab || item.penanggungjawab || item['Penanggung Jawab'] || ''
+      ),
+      pembahasan: String(
+        item.pembahasan || item['Pembahasan'] || item.topik || ''
+      ).trim(),
     };
 
     const key = attendanceKey(normalizedItem);
@@ -145,6 +151,16 @@ const ORE_GETTING_HEADERS = [
   'Timestamp Pengumpulan'
 ];
 
+const ATTENDANCE_HEADERS = [
+  'Tanggal',
+  'Shift',
+  'Lokasi Kerja',
+  'Nama',
+  'Penanggung Jawab',
+  'Pembahasan',
+  'Timestamp Pengumpulan'
+];
+
 function doGet(e) {
   try {
     const type = e && e.parameter ? String(e.parameter.type || '').toLowerCase() : '';
@@ -156,10 +172,20 @@ function doGet(e) {
         return respond_({ success: true, items: [], values: [], count: 0 }, getCallback_(e));
       }
 
-      const values = attendanceSheet.getRange(1, 1, lastRow, Math.max(5, attendanceSheet.getLastColumn())).getDisplayValues();
+      const values = attendanceSheet.getRange(1, 1, lastRow, Math.max(ATTENDANCE_HEADERS.length, attendanceSheet.getLastColumn())).getDisplayValues();
       const dataRows = values.slice(1)
         .filter(row => row.some(value => String(value).trim() !== ''))
-        .map(function(row) { return row.length >= 6 ? [row[0], row[1], row[2], row[3], row[5]] : row.slice(0, 5); });
+        .map(function(row) {
+          return [
+            row[0] || '',
+            row[1] || '',
+            row[2] || '',
+            row[3] || '',
+            row[4] || '',
+            row[5] || '',
+            row[6] || ''
+          ];
+        });
       return respond_({ success: true, items: dataRows, values: dataRows, count: dataRows.length }, getCallback_(e));
     }
 
@@ -258,7 +284,7 @@ function saveAttendance_(payload) {
     // AMBIL KEY YANG SUDAH ADA DI SHEET
     // --------------------------------------------------------
     const existingRows = sheet.getLastRow() > 1
-      ? sheet.getRange(2, 1, sheet.getLastRow() - 1, 5).getValues()
+      ? sheet.getRange(2, 1, sheet.getLastRow() - 1, ATTENDANCE_HEADERS.length).getValues()
       : [];
 
     const existingKeys = {};
@@ -276,20 +302,33 @@ function saveAttendance_(payload) {
 
     items.forEach(function(item) {
       const row = Array.isArray(item)
-        ? [item[0] || '', item[1] || '', item[2] || '', item[3] || '']
+        ? [
+            item[0] || '',
+            item[1] || '',
+            item[2] || '',
+            item[3] || '',
+            item[4] || '',
+            item[5] || '',
+            item[6] || ''
+          ]
         : [
             item.date || item.tanggal || '',
             item.shift || '',
             item.location || item.lokasi || item.lokasiKerja || '',
-            item.name || item.nama || ''
+            item.name || item.nama || '',
+            item.penanggungJawab || item.penanggungjawab || item['Penanggung Jawab'] || '',
+            item.pembahasan || item['Pembahasan'] || item.topik || '',
+            ''
           ];
 
       const date = row[0];
       const shift = row[1];
       const location = row[2];
       const name = row[3];
+      const penanggungJawab = String(row[4] || '').trim();
+      const pembahasan = String(row[5] || '').trim();
 
-      if (!date || !name) { invalidCount++; return; }
+      if (!date || !name || !penanggungJawab || !pembahasan) { invalidCount++; return; }
 
       const key = attendanceKey_(date, shift, name);
       if (!key) { invalidCount++; return; }
@@ -305,6 +344,8 @@ function saveAttendance_(payload) {
         String(shift).trim(),
         String(location).trim(),
         String(name).trim().replace(/\\s+/g, ' '),
+        String(penanggungJawab).trim().replace(/\\s+/g, ' '),
+        String(pembahasan).trim(),
         submittedAt
       ];
     });
@@ -323,7 +364,7 @@ function saveAttendance_(payload) {
     }
 
     const startRow = sheet.getLastRow() + 1;
-    sheet.getRange(startRow, 1, newRows.length, 5).setValues(newRows);
+    sheet.getRange(startRow, 1, newRows.length, ATTENDANCE_HEADERS.length).setValues(newRows);
 
     return respond_({
       success: true,
@@ -475,7 +516,7 @@ function getAttendanceSheet_() {
   if (!sheet) {
     sheet = ss.insertSheet(ATTENDANCE_SHEET_NAME, 1);
   }
-  ensureHeaders_(sheet, ['Tanggal', 'Shift', 'Lokasi Kerja', 'Nama', 'Timestamp Pengumpulan']);
+  ensureHeaders_(sheet, ['Tanggal', 'Shift', 'Lokasi Kerja', 'Nama', 'Penanggung Jawab', 'Pembahasan', 'Timestamp Pengumpulan']);
   return sheet;
 }
 
@@ -708,7 +749,7 @@ export async function syncLogsToGoogleSheets(url, logs) {
 // NORMALISASI DAILY ABSENSI
 // UNIQUE KEY = TANGGAL + NAMA
 // ============================================================
-function normalizeAttendancePayload_(attendance = []) {
+export function normalizeAttendancePayload_(attendance = []) {
   const deduped = [];
   const keys = new Set();
 
@@ -744,6 +785,23 @@ function normalizeAttendancePayload_(attendance = []) {
       )
         .trim()
         .replace(/\s+/g, ' '),
+
+      penanggungJawab: String(
+        item.penanggungJawab ||
+        item.penanggungjawab ||
+        item['Penanggung Jawab'] ||
+        ''
+      )
+        .trim()
+        .replace(/\s+/g, ' '),
+
+      pembahasan: String(
+        item.pembahasan ||
+        item['Pembahasan'] ||
+        item.topik ||
+        ''
+      )
+        .trim(),
     };
 
     const key = attendanceKey(normalizedItem);
@@ -913,22 +971,34 @@ export function readAttendanceFromGoogleSheets(url) {
         ? payload.items
         : [];
 
-      const normalized = rows.map((row, index) => ({
-        id: `gs-attendance-${index}-${row[4] || ''}`,
-        date: String(row[0] || '')
-          .trim()
-          .replace(/\s+/g, ' '),
-        shift: String(row[1] || '')
-          .trim()
-          .replace(/\s+/g, ' '),
-        location: String(row[2] || '')
-          .trim()
-          .replace(/\s+/g, ' '),
-        name: String(row[3] || '')
-          .trim()
-          .replace(/\s+/g, ' '),
-        submissionTimestamp: row[4] || '',
-      }));
+      const normalized = rows.map((row, index) => {
+        const hasNewColumns = Array.isArray(row) && row.length >= 7;
+        const penanggungJawab = hasNewColumns ? row[4] : '';
+        const pembahasan = hasNewColumns ? row[5] : '';
+        const submissionTimestamp = hasNewColumns ? row[6] : row.length >= 6 ? row[5] : row[4] || '';
+
+        return {
+          id: `gs-attendance-${index}-${row[3] || ''}`,
+          date: String(row[0] || '')
+            .trim()
+            .replace(/\s+/g, ' '),
+          shift: String(row[1] || '')
+            .trim()
+            .replace(/\s+/g, ' '),
+          location: String(row[2] || '')
+            .trim()
+            .replace(/\s+/g, ' '),
+          name: String(row[3] || '')
+            .trim()
+            .replace(/\s+/g, ' '),
+          penanggungJawab: String(penanggungJawab || '')
+            .trim()
+            .replace(/\s+/g, ' '),
+          pembahasan: String(pembahasan || '')
+            .trim(),
+          submissionTimestamp: String(submissionTimestamp || ''),
+        };
+      });
 
       const deduped = [];
       const keyIndex = new Map();

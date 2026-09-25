@@ -6,6 +6,30 @@ import { savePendingData, deletePendingData } from '../services/offlineDB';
 
 const STORAGE_KEY = 'mineTrack_ore_getting_records';
 
+const oreGettingInputStyle = {
+  backgroundColor: '#163559',
+  color: '#ffffff',
+  border: '1px solid #2b4f7a',
+  borderRadius: '8px',
+  padding: '8px',
+  fontSize: '11px',
+  width: '100%',
+  outline: 'none',
+  WebkitTextFillColor: '#ffffff',
+  caretColor: '#ffffff',
+};
+
+const oreGettingTimestampStyle = {
+  backgroundColor: '#163559',
+  color: '#ffffff',
+  border: '1px solid #2b4f7a',
+  borderRadius: '8px',
+  padding: '8px',
+  fontSize: '11px',
+  fontWeight: 700,
+  whiteSpace: 'nowrap',
+};
+
 const initialForm = {
   date: toWitaDateInput(),
   areaPit: areaPitOptions[0],
@@ -291,6 +315,7 @@ export default function OreGetting() {
                 updateField('date', event.target.value)
               }
               required
+              style={oreGettingInputStyle}
             />
           </label>
 
@@ -303,6 +328,7 @@ export default function OreGetting() {
                 updateField('areaPit', event.target.value)
               }
               required
+              style={oreGettingInputStyle}
             >
               {areaPitOptions.map((area) => (
                 <option key={area} value={area}>
@@ -321,6 +347,7 @@ export default function OreGetting() {
                 updateField('shift', event.target.value)
               }
               required
+              style={oreGettingInputStyle}
             >
               <option value="Shift 1 (Siang)">
                 Shift 1 (Siang)
@@ -341,6 +368,7 @@ export default function OreGetting() {
                 updateField('metode', event.target.value)
               }
               required
+              style={oreGettingInputStyle}
             >
               <option value="CEK">CEK</option>
               <option value="PSI">PSI</option>
@@ -360,6 +388,7 @@ export default function OreGetting() {
                 updateField('idMetode', event.target.value)
               }
               placeholder="Masukkan ID metode"
+              style={oreGettingInputStyle}
             />
           </label>
 
@@ -373,6 +402,7 @@ export default function OreGetting() {
                 updateField('acuan', event.target.value)
               }
               placeholder="Masukkan acuan"
+              style={oreGettingInputStyle}
             />
           </label>
 
@@ -386,6 +416,7 @@ export default function OreGetting() {
                 updateField('titikBor', event.target.value)
               }
               placeholder="Masukkan titik bor"
+              style={oreGettingInputStyle}
             />
           </label>
 
@@ -399,6 +430,7 @@ export default function OreGetting() {
                 updateField('blockModel', event.target.value)
               }
               placeholder="Masukkan block model"
+              style={oreGettingInputStyle}
             />
           </label>
 
@@ -412,6 +444,7 @@ export default function OreGetting() {
                 updateField('elevasi', event.target.value)
               }
               placeholder="Masukkan elevasi"
+              style={oreGettingInputStyle}
             />
           </label>
 
@@ -428,6 +461,7 @@ export default function OreGetting() {
                 updateJumlahSampel(event.target.value)
               }
               placeholder="Contoh: 2"
+              style={oreGettingInputStyle}
             />
 
             <small>Satuan: inc</small>
@@ -511,7 +545,7 @@ export default function OreGetting() {
                         : '-'}
                     </td>
 
-                    <td>
+                    <td style={oreGettingTimestampStyle}>
                       {formatWitaTimestamp(
                         record.submissionTimestamp ||
                           record.createdAt

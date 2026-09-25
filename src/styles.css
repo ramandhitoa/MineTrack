@@ -19,6 +19,57 @@ button {
   cursor:pointer;
   border:0;
 }
+.password-input-wrap {
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  width:100%;
+}
+.password-input-label {
+  font-size:12px;
+  font-weight:700;
+  color:var(--text-subtle);
+}
+.password-input-shell {
+  position:relative;
+  display:flex;
+  align-items:center;
+  width:100%;
+  min-height:44px;
+}
+.password-input-field {
+  width:100%;
+  min-height:44px;
+  padding:12px 42px 12px 12px;
+  border:1px solid var(--border);
+  border-radius:10px;
+  background:var(--bg-panel);
+  color:var(--text);
+  outline:none;
+}
+.password-input-field:focus {
+  border-color:var(--primary);
+  box-shadow:0 0 0 3px rgba(96,165,250,0.18);
+}
+.password-input-toggle {
+  position:absolute;
+  right:8px;
+  display:grid;
+  place-items:center;
+  width:28px;
+  height:28px;
+  border-radius:8px;
+  background:transparent;
+  color:var(--text-subtle);
+  font-size:16px;
+  line-height:1;
+}
+.password-input-toggle:hover,
+.password-input-toggle:focus-visible {
+  background:var(--bg-soft);
+  color:var(--text);
+  outline:none;
+}
 .app {
   min-height:100vh;
   display:flex;
@@ -740,6 +791,50 @@ header {
   font-size:10px;
   font-weight:800;
 }
+.attendanceNameChecklistLabel {
+  grid-column:span 2;
+}
+.attendanceNameChecklistBox {
+  display:grid;
+  grid-template-columns:repeat(2, minmax(0, 1fr));
+  gap:6px;
+  max-height:180px;
+  overflow:auto;
+  padding:8px 10px;
+  border:1px solid var(--button-border);
+  border-radius:10px;
+  background:var(--button-bg);
+  color:var(--button-text);
+}
+.attendanceNameItem {
+  display:flex;
+  align-items:center;
+  gap:8px;
+  padding:7px 8px;
+  border-radius:8px;
+  border:1px solid transparent;
+  background:rgba(148, 163, 184, 0.06);
+  color:var(--button-text);
+  font-size:11px;
+  font-weight:700;
+  cursor:pointer;
+  transition:all .15s ease;
+}
+.attendanceNameItem input {
+  accent-color:var(--primary);
+  width:14px;
+  height:14px;
+  margin:0;
+}
+.attendanceNameItem.checked {
+  background:rgba(96, 165, 250, 0.12);
+  border-color:rgba(96, 165, 250, 0.35);
+}
+.attendanceNameItem span {
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
 .attendanceForm input,
 .attendanceForm select {
   min-width:0;
@@ -754,6 +849,115 @@ header {
 .attendanceForm button {
   min-height:34px;
   white-space:nowrap;
+}
+.cameraModal {
+  position:fixed;
+  inset:0;
+  z-index:80;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:16px;
+  background:rgba(2, 6, 23, 0.74);
+}
+.cameraModalContent {
+  width:min(92vw, 420px);
+  max-width:100%;
+  background:var(--bg-panel);
+  border:1px solid var(--border);
+  border-radius:18px;
+  padding:14px;
+  box-shadow:0 30px 70px rgba(15, 23, 42, 0.45);
+}
+.cameraModalHead {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  margin-bottom:12px;
+  color:var(--text);
+  font-size:12px;
+}
+.cameraModalHead button {
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:32px;
+  height:32px;
+  border-radius:8px;
+  background:var(--button-bg);
+  color:var(--button-text);
+  border:1px solid var(--button-border);
+}
+.cameraFrameWrap {
+  position:relative;
+  width:100%;
+  max-width:100%;
+  aspect-ratio:4 / 5;
+  overflow:hidden;
+  border-radius:14px;
+  background:#020617;
+  border:1px solid var(--border);
+}
+.cameraPreview {
+  display:block;
+  width:100%;
+  height:100%;
+  object-fit:cover;
+  background:#020617;
+}
+.cameraCaptureButton {
+  width:100%;
+  margin-top:12px;
+  justify-content:center;
+}
+.attendanceSharePreview {
+  margin:16px 0 0;
+  border:1px solid var(--border);
+  border-radius:14px;
+  background:var(--bg-soft-2);
+  padding:14px;
+  max-width:520px;
+}
+.attendanceSharePreviewHead {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  margin-bottom:10px;
+  color:var(--text);
+}
+.attendanceSharePreviewImage {
+  display:block;
+  width:100%;
+  max-height:220px;
+  object-fit:cover;
+  border-radius:10px;
+  border:1px solid var(--border);
+  background:#020617;
+}
+.attendanceSharePreviewContent {
+  margin-top:12px;
+  color:var(--text-subtle);
+  font-size:12px;
+  line-height:1.55;
+}
+.attendanceShareTitle {
+  font-size:16px;
+  font-weight:800;
+  color:var(--text);
+  margin-bottom:10px;
+  text-align:center;
+}
+.attendanceSharePreviewContent p {
+  margin:4px 0;
+}
+.attendanceSharePreviewContent ol {
+  margin:10px 0 0 18px;
+  padding:0;
+}
+.attendanceShareButton {
+  width:100%;
+  justify-content:center;
+  margin-top:12px;
 }
 .attendanceTable {
   border-top:1px solid var(--border);

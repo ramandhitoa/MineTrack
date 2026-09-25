@@ -89,6 +89,7 @@ export default function DailyAttendance({
 }) {
   const [form, setForm] = useState(() => ({
     ...emptyAttendance,
+    selectedNames: [],
     photoDataUrl: '',
   }));
 
@@ -96,6 +97,7 @@ export default function DailyAttendance({
   const [cameraLoading, setCameraLoading] = useState(false);
   const [photoProcessing, setPhotoProcessing] = useState(false);
   const [photoPreview, setPhotoPreview] = useState('');
+  const [savedReport, setSavedReport] = useState(null);
 
   const videoRef = useRef(null);
   const streamRef = useRef(null);
@@ -112,6 +114,23 @@ export default function DailyAttendance({
       ...current,
       [key]: value,
     }));
+  };
+
+  const toggleName = (name) => {
+    setForm((current) => {
+      const currentNames = Array.isArray(current.selectedNames)
+        ? current.selectedNames
+        : [];
+      const nextNames = currentNames.includes(name)
+        ? currentNames.filter((item) => item !== name)
+        : [...currentNames, name];
+
+      return {
+        ...current,
+        selectedNames: nextNames,
+        name: nextNames[0] || '',
+      };
+    });
   };
 
   const openCamera = async () => {
@@ -203,15 +222,123 @@ export default function DailyAttendance({
     update('photoDataUrl', '');
   };
 
+  const formatReportDate = (dateValue) => {
+    if (!dateValue) return '-';
+
+    const normalized = String(dateValue).includes('T')
+      ? dateValue
+      : `${dateValue}T00:00:00`;
+
+    const parsed = new Date(normalized);
+    if (Number.isNaN(parsed.getTime())) return dateValue;
+
+    return new Intl.DateTimeFormat('id-ID', {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+    }).format(parsed);
+  };
+
+  const buildWhatsAppMessage = (report) => {
+    if (!report) return '';
+
+    const participants = (report.participants || []).filter(Boolean);
+    const lines = [];
+
+    const reportTitle = `P5M ${String(report.location || '').toUpperCase()}`;
+    lines.push(reportTitle);
+    lines.push('');
+    lines.push(`Tanggal : ${report.dateLabel || '-'}`);
+    lines.push('');
+    lines.push(`Penanggung Jawab : ${report.penanggungJawab || '-'}`);
+    lines.push('');
+    lines.push(`Lokasi : ${report.location || '-'}`);
+    lines.push('');
+    lines.push('');
+    lines.push(`Topik : ${report.pembahasan || '-'}`);
+    lines.push('');
+    lines.push('');
+    lines.push(`Jumlah Peserta : ${participants.length} Orang`);
+    lines.push('');
+
+    participants.forEach((participant, index) => {
+      lines.push(`${index + 1}. ${participant}`);
+    });
+
+    return lines.join('\n');
+  };
+
+  const openWhatsAppShare = async () => {
+    if (!savedReport) return;
+
+    const text = buildWhatsAppMessage(savedReport);
+    const fileDataUrl = savedReport.photoDataUrl || '';
+
+    if (navigator.share && fileDataUrl && navigator.canShare) {
+      try {
+        const match = fileDataUrl.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.*)$/);
+        if (match) {
+          const mimeType = match[1] || 'image/jpeg';
+          const binary = atob(match[2]);
+          const bytes = new Uint8Array(binary.length);
+
+          for (let index = 0; index < binary.length; index += 1) {
+            bytes[index] = binary.charCodeAt(index);
+          }
+
+          const file = new File([bytes], 'daily-absensi.jpg', { type: mimeType });
+          if (navigator.canShare({ files: [file] })) {
+            await navigator.share({
+              title: 'Laporan Daily Absensi',
+              text,
+              files: [file],
+            });
+            return;
+          }
+        }
+      } catch (error) {
+        console.warn('Share file WhatsApp tidak didukung, fallback ke teks:', error);
+      }
+    }
+
+    const encoded = encodeURIComponent(text);
+    window.open(`https://wa.me/?text=${encoded}`, '_blank', 'noopener,noreferrer');
+  };
+
   const save = async (event) => {
     event.preventDefault();
 
+    const selectedNames = (Array.isArray(form.selectedNames)
+      ? form.selectedNames
+      : [form.name].filter(Boolean)
+    ).filter(Boolean);
+
     try {
-      await onSaveAttendance(event, form);
+      await onSaveAttendance(event, {
+        ...form,
+        selectedNames,
+        name: selectedNames[0] || form.name || '',
+      });
+
+      const participantNames = selectedNames.filter(
+        (name) => name !== form.penanggungJawab
+      );
+
+      setSavedReport({
+        date: form.date,
+        dateLabel: formatReportDate(form.date),
+        penanggungJawab: form.penanggungJawab,
+        location: form.location,
+        pembahasan: form.pembahasan,
+        participants: participantNames,
+        photoDataUrl: photoPreview || form.photoDataUrl || '',
+      });
 
       setForm({
         ...emptyAttendance,
         date: form.date,
+        selectedNames: [],
         photoDataUrl: '',
       });
       setPhotoPreview('');
@@ -287,22 +414,53 @@ export default function DailyAttendance({
             </select>
           </label>
 
-          <label>
+          <label className="attendanceNameChecklistLabel">
             <span>Nama</span>
-            <select
-              value={form.name || ''}
+            <div className="attendanceNameChecklistBox">
+              {attendanceNames.map((name) => {
+                const checked = (form.selectedNames || []).includes(name);
+
+                return (
+                  <label
+                    key={name}
+                    className={`attendanceNameItem ${checked ? 'checked' : ''}`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => toggleName(name)}
+                    />
+                    <span>{name}</span>
+                  </label>
+                );
+              })}
+            </div>
+          </label>
+
+          <label>
+            <span>Penanggung Jawab</span>
+            <input
+              type="text"
+              value={form.penanggungJawab || ''}
               onChange={(event) =>
-                update('name', event.target.value)
+                update('penanggungJawab', event.target.value)
               }
+              placeholder="Masukkan nama penanggung jawab"
               required
-            >
-              <option value="">Pilih nama</option>
-              {attendanceNames.map((name) => (
-                <option key={name} value={name}>
-                  {name}
-                </option>
-              ))}
-            </select>
+            />
+          </label>
+
+          <label>
+            <span>Pembahasan</span>
+            <textarea
+              value={form.pembahasan || ''}
+              onChange={(event) =>
+                update('pembahasan', event.target.value)
+              }
+              rows={4}
+              placeholder="Masukkan topik atau pembahasan"
+              required
+            />
           </label>
 
           <div className="attendancePhotoBox">
@@ -370,13 +528,15 @@ export default function DailyAttendance({
                 </button>
               </div>
 
-              <video
-                ref={videoRef}
-                autoPlay
-                playsInline
-                muted
-                className="cameraPreview"
-              />
+              <div className="cameraFrameWrap">
+                <video
+                  ref={videoRef}
+                  autoPlay
+                  playsInline
+                  muted
+                  className="cameraPreview"
+                />
+              </div>
 
               <button
                 type="button"
@@ -393,6 +553,57 @@ export default function DailyAttendance({
           </div>
         )}
 
+        {savedReport && (
+          <div className="attendanceSharePreview">
+            <div className="attendanceSharePreviewHead">
+              <strong>Preview Laporan</strong>
+            </div>
+
+            {savedReport.photoDataUrl && (
+              <img
+                src={savedReport.photoDataUrl}
+                alt="Preview foto absensi"
+                className="attendanceSharePreviewImage"
+              />
+            )}
+
+            <div className="attendanceSharePreviewContent">
+              <div className="attendanceShareTitle">P5M {String(savedReport.location || '').toUpperCase()}</div>
+              <p>
+                <strong>Hari / Tanggal :</strong> {savedReport.dateLabel || savedReport.date || '-'}
+              </p>
+              <p>
+                <strong>Penanggung Jawab :</strong> {savedReport.penanggungJawab || '-'}
+              </p>
+              <p>
+                <strong>Lokasi :</strong> {savedReport.location || '-'}
+              </p>
+              <p>
+                <strong>Topik :</strong> {savedReport.pembahasan || '-'}
+              </p>
+              <p>
+                <strong>Jumlah Peserta :</strong> {savedReport.participants?.length || 0} Orang
+              </p>
+
+              <ol>
+                {(savedReport.participants || []).map((participant) => (
+                  <li key={`${participant}-${Math.random()}`}>
+                    {participant}
+                  </li>
+                ))}
+              </ol>
+            </div>
+
+            <button
+              type="button"
+              className="primary attendanceShareButton"
+              onClick={openWhatsAppShare}
+            >
+              Share ke WhatsApp
+            </button>
+          </div>
+        )}
+
         <div className="tableWrap">
           <table>
             <thead>
@@ -401,6 +612,8 @@ export default function DailyAttendance({
                 <th>Shift</th>
                 <th>Lokasi Kerja</th>
                 <th>Nama</th>
+                <th>Penanggung Jawab</th>
+                <th>Pembahasan</th>
                 <th>Timestamp Pengumpulan</th>
                 <th>Foto</th>
               </tr>
@@ -409,7 +622,7 @@ export default function DailyAttendance({
             <tbody>
               {attendance.length === 0 ? (
                 <tr>
-                  <td colSpan="6" style={{ textAlign: 'center' }}>
+                  <td colSpan="8" style={{ textAlign: 'center' }}>
                     Belum ada data absensi.
                   </td>
                 </tr>
@@ -428,6 +641,10 @@ export default function DailyAttendance({
                       <td>{item.shift || '-'}</td>
                       <td>{item.location || '-'}</td>
                       <td>{item.name || '-'}</td>
+                      <td>{item.penanggungJawab || '-'}</td>
+                      <td style={{ maxWidth: '220px', whiteSpace: 'pre-wrap' }}>
+                        {item.pembahasan || '-'}
+                      </td>
                       <td>{item.submissionTimestamp || '-'}</td>
                       <td>
                         {photo ? (

@@ -5,6 +5,7 @@ import {
   attendanceKey,
   getUnsyncedAttendanceItems,
   mergeAttendanceItems,
+  normalizeAttendancePayload_,
 } from './googleSheetsService.js';
 
 test('attendanceKey menggunakan tanggal dan nama sebagai kunci unik', () => {
@@ -36,4 +37,23 @@ test('getUnsyncedAttendanceItems hanya mengembalikan item baru yang belum ada', 
     ['Citra']
   );
   assert.equal(mergeAttendanceItems(local).length, 3);
+});
+
+test('normalizeAttendancePayload_ menjaga field Penanggung Jawab dan Pembahasan', () => {
+  const payload = normalizeAttendancePayload_([
+    {
+      date: '2026-09-19',
+      shift: 'Pagi',
+      name: 'Andi',
+      penanggungJawab: 'Ardiansyah Rahman',
+      pembahasan: 'Pesan-pesan keselamatan dan update isu teknis & non teknis',
+    },
+  ]);
+
+  assert.equal(payload.length, 1);
+  assert.equal(payload[0].penanggungJawab, 'Ardiansyah Rahman');
+  assert.equal(
+    payload[0].pembahasan,
+    'Pesan-pesan keselamatan dan update isu teknis & non teknis'
+  );
 });

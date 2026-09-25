@@ -176,6 +176,8 @@ export const emptyAttendance = {
   shift: 'Shift 1',
   location: attendanceLocations[0],
   name: attendanceNames[0],
+  penanggungJawab: '',
+  pembahasan: '',
   photoDataUrl: '',
 };
 
