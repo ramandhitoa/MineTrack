@@ -41,10 +41,10 @@ export default function Dashboard({ metrics, logs, chartData, loadingStats, pend
           accent="amber"
         />
         <Card
-          label="Jam Operasional Shift"
-          value={metrics.hours}
-          unit="Jam"
-          sub={`Rata-Rata Moisture MC: ${metrics.mc}% MC`}
+          label="Total Dumpingan"
+          value={logs.filter((log) => String(log.dumpingArea ?? '').trim() !== '').length}
+          unit="Dumpingan"
+          sub="Laporan dengan dumping terisi"
           accent="cyan"
         />
         <Card

@@ -15,7 +15,24 @@ export const AUTH_USER_FIELD = Object.freeze({
   lastLoginAt: 'lastLoginAt',
 });
 
+export const AUTH_BOOTSTRAP_FIELD = Object.freeze({
+  ownerBootstrapDoc: 'ownerBootstrap',
+  appOwnerEmail: 'appOwnerEmail',
+  appOwnerNik: 'appOwnerNik',
+  ownerUid: 'ownerUid',
+  status: 'status',
+  bootstrappedAt: 'bootstrappedAt',
+  updatedAt: 'updatedAt',
+});
+
+export const AUTH_BOOTSTRAP_STATUS = Object.freeze({
+  PENDING: 'PENDING',
+  LOCKED: 'LOCKED',
+  COMPLETE: 'COMPLETE',
+});
+
 export const AUTH_AUDIT_EVENT = Object.freeze({
+  OWNER_BOOTSTRAP: 'OWNER_BOOTSTRAP',
   LOGIN: 'LOGIN',
   LOGIN_FAILED: 'LOGIN_FAILED',
   LOGOUT: 'LOGOUT',

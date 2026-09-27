@@ -4,17 +4,17 @@
 // ============================================================
 
 import {
+  BarChart3,
   CalendarDays,
   ClipboardList,
   Clock3,
-  LayoutDashboard,
   ListChecks,
   Table2,
   UserCheck,
 } from 'lucide-react';
 
 export const tabs = [
-  ['dashboard', 'Dashboard Hasil Kerja', LayoutDashboard],
+  ['dashboard', 'Dashboard Hasil Kerja', BarChart3],
   ['harian', 'Progres Kerja Harian', ListChecks],
   ['mingguan', 'Progres Mingguan', CalendarDays],
   ['bulanan', 'Progres Bulanan', CalendarDays],

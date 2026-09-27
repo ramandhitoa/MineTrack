@@ -14,7 +14,13 @@ import {
   deletePendingData,
 } from './services/offlineDB';
 import Layout from './components/Layout';
+import LoginScreen from './components/LoginScreen';
 import { DailyModal, PendingModal, ScriptModal } from './components/Modals';
+import {
+  loginWithNikAndPassword,
+  logoutFromFirebaseSession,
+  observeFirebaseAuthSession,
+} from './auth/authService';
 import Dashboard from './pages/Dashboard';
 import Daily from './pages/Daily';
 import DailyAttendance from './pages/DailyAttendance';
@@ -23,6 +29,8 @@ import Monthly from './pages/Monthly';
 import Pending from './pages/Pending';
 import Excel from './pages/Excel';
 import OreGetting from './pages/OreGetting';
+import MasterAkunPage from './components/MasterAkunPage';
+import ManagementUserPage from './components/ManagementUserPage';
 import { pageTitles, STORAGE_KEYS } from './constants';
 import {
   emptyAttendance,
@@ -77,6 +85,9 @@ export default function App() {
   const [mobileNav, setMobileNav] = useState(false);
   const [alert, setAlert] = useState('');
   const [theme, setTheme] = useState(() => localStorage.getItem('mineTrackTheme') || 'dark');
+  const [authSession, setAuthSession] = useState(null);
+  const [authError, setAuthError] = useState('');
+  const [authLoading, setAuthLoading] = useState(false);
 
   // -------------------- Data utama aplikasi --------------------
   const [logs, setLogs] = useState(clearOldProgressOnce);
@@ -179,6 +190,7 @@ export default function App() {
     readLogsFromGoogleSheets(gsUrl)
       .then((remoteLogs) => {
         if (cancelled) return;
+
         setGsRemoteCount(remoteLogs.length);
         if (remoteLogs.length > 0) setLogs(remoteLogs);
         setGsStatus(`Terhubung • ${remoteLogs.length} baris`);
@@ -194,6 +206,26 @@ export default function App() {
       });
     return () => { cancelled = true; };
   }, [gsUrl]);
+
+  useEffect(() => {
+    const unsubscribe = observeFirebaseAuthSession({
+      onSession: (session) => {
+        setAuthSession(session);
+        if (session) {
+          setAuthError('');
+        }
+      },
+      onError: (message) => {
+        console.error('[AUTH SESSION ERROR]', {
+          message: message || 'Authentication failed.',
+          raw: message,
+        });
+        setAuthError(message || 'Authentication failed.');
+      },
+    });
+
+    return () => unsubscribe();
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -245,6 +277,47 @@ export default function App() {
   const notify = (message) => {
     setAlert(message);
     window.setTimeout(() => setAlert(''), 4500);
+  };
+
+  const handleAuthLogin = async ({ nik, password }) => {
+    setAuthError('');
+    setAuthLoading(true);
+
+    try {
+      const result = await loginWithNikAndPassword({ nik, password });
+      setAuthSession(result.session);
+      notify(`Selamat datang ${result.user.name || result.user.nik}.`);
+    } catch (error) {
+      console.error('[AUTH LOGIN ORIGINAL ERROR]', {
+        name: error?.name,
+        code: error?.code,
+        message: error?.message,
+        stack: error?.stack,
+        raw: error,
+      });
+
+      const message = error?.message || 'Login gagal.';
+      const safeMessage = message.includes('Firebase authentication is not configured')
+        ? 'Firebase authentication is not configured. Please provide the Firebase project configuration.'
+        : 'Login gagal. Silakan periksa NIK dan password.';
+
+      setAuthError(safeMessage);
+      notify(safeMessage);
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      await logoutFromFirebaseSession();
+    } catch {
+      // ignore logout errors and clear local app session
+    }
+
+    setAuthSession(null);
+    setAuthError('');
+    notify('Logout berhasil.');
   };
 
   // -------------------- Perhitungan KPI dashboard --------------------
@@ -351,6 +424,17 @@ export default function App() {
       // Baca ulang Google Sheets untuk memastikan data sudah masuk
       const sharedLogs = await readLogsFromGoogleSheets(gsUrl);
 
+      console.log('[ACUAN NI SETLOGS TRACE]', {
+        source: 'autoSyncProduction',
+        count: sharedLogs.length,
+        latest: sharedLogs.length ? {
+          date: sharedLogs[0]?.date,
+          pit: sharedLogs[0]?.pit,
+          dumping: sharedLogs[0]?.dumpingArea,
+          niGrade: sharedLogs[0]?.niGrade,
+          type: typeof sharedLogs[0]?.niGrade,
+        } : null,
+      });
       setLogs(sharedLogs);
       setGsRemoteCount(sharedLogs.length);
       setGsStatus(`Terhubung • ${sharedLogs.length} baris`);
@@ -435,7 +519,7 @@ export default function App() {
 
     const nextLogs = [newLog, ...logs];
 
-setLogs(nextLogs);
+    setLogs(nextLogs);
 setDailyForm({ ...emptyDaily, date: toWitaDateInput() });
 setDailyOpen(false);
 
@@ -708,6 +792,26 @@ const syncGoogleSheets = async () => {
     }
   };
 
+  if (!authSession) {
+    return (
+      <LoginScreen
+        onLogin={handleAuthLogin}
+        error={authError}
+        loading={authLoading}
+      />
+    );
+  }
+
+  const currentUser = authSession?.user || null;
+  const currentRole = currentUser?.role || 'USER';
+  const adminPageTitles = {
+    'owner-users': 'Manajemen Pengguna',
+    'owner-master': 'Master Akun',
+    'owner-settings': 'Pengaturan',
+    'admin-users': 'Manajemen User',
+    'admin-master': 'Master User',
+  };
+
   return (
     <>
       <Layout
@@ -716,7 +820,7 @@ const syncGoogleSheets = async () => {
         mobileNav={mobileNav}
         setMobileNav={setMobileNav}
         pendingCount={pending.filter((job) => job.status !== 'Selesai').length}
-        title={pageTitles[activeTab]}
+        title={pageTitles[activeTab] || 'MineTrack'}
         alert={alert}
         setAlert={setAlert}
         theme={theme}
@@ -725,6 +829,9 @@ const syncGoogleSheets = async () => {
         onInputPending={() => setPendingOpen(true)}
         onCopyExcel={handleCopyExcel}
         onSyncGoogleSheets={syncGoogleSheets}
+        onLogout={handleLogout}
+        user={currentUser}
+        role={currentRole}
       >
         {activeTab === 'dashboard' && (
           <Dashboard
@@ -791,6 +898,17 @@ const syncGoogleSheets = async () => {
             gsRemoteCount={gsRemoteCount}
           />
         )}
+
+        {activeTab === 'owner-master' && <MasterAkunPage role="OWNER" />}
+        {activeTab === 'owner-users' && <ManagementUserPage role="OWNER" />}
+        {activeTab === 'owner-settings' && (
+          <div className="adminPlaceholder">
+            <h3>Pengaturan</h3>
+            <p>Pengaturan aplikasi umum tetap mengikuti konfigurasi MineTrack yang sudah ada.</p>
+          </div>
+        )}
+        {activeTab === 'admin-master' && <MasterAkunPage role="APP_ADMIN" />}
+        {activeTab === 'admin-users' && <ManagementUserPage role="APP_ADMIN" />}
       </Layout>
 
       {dailyOpen && (

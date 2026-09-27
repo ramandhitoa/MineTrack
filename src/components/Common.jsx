@@ -34,7 +34,7 @@ export function LogTable({ logs, onDelete }) {
             <th className="num">Rit Today</th>
             <th className="num">Total Rit</th>
             <th className="num">Tonase</th>
-            <th>Assay QC</th>
+            <th>Acuan Ni</th>
             {onDelete && <th>Aksi</th>}
           </tr>
         </thead>
@@ -50,8 +50,11 @@ export function LogTable({ logs, onDelete }) {
               </td>
             </tr>
           ) : (
-            logs.map((log) => (
-              <tr key={log.id}>
+            logs.map((log) => {
+              const acuanNi = Number(log.niGrade ?? 0);
+
+              return (
+                <tr key={log.id}>
                 {/* TANGGAL / SHIFT */}
                 <td>
                   <b>
@@ -120,16 +123,16 @@ export function LogTable({ logs, onDelete }) {
                   {fmt(log.tonnage)} MT
                 </td>
 
-                {/* ASSAY QC */}
+                {/* ACUAN NI */}
                 <td
                   className={
-                    Number(log.niGrade || 0) >= 1.6
+                    acuanNi >= 1.6
                       ? 'greenText'
                       : 'amberText'
                   }
                 >
                   <b>
-                    {Number(log.niGrade || 0).toFixed(2)}%
+                    {acuanNi.toFixed(2)}%
                   </b>
                 </td>
 
@@ -146,7 +149,8 @@ export function LogTable({ logs, onDelete }) {
                   </td>
                 )}
               </tr>
-            ))
+              );
+            })
           )}
         </tbody>
       </table>

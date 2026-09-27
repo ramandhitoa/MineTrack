@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react';
 import { areaPitOptions } from '../data/initialData';
-import { DEFAULT_GOOGLE_APPS_SCRIPT_URL } from '../services/googleSheetsService';
+import {
+  DEFAULT_GOOGLE_APPS_SCRIPT_URL,
+  readOreGettingFromGoogleSheets,
+} from '../services/googleSheetsService';
 import { toWitaDateInput } from '../utils/formatters';
 import { savePendingData, deletePendingData } from '../services/offlineDB';
 
@@ -120,6 +123,7 @@ export default function OreGetting() {
       return [];
     }
   });
+  const [sheetRecords, setSheetRecords] = useState([]);
 
   useEffect(() => {
     localStorage.setItem(
@@ -127,6 +131,24 @@ export default function OreGetting() {
       JSON.stringify({ form, records })
     );
   }, [form, records]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const gsUrl =
+      localStorage.getItem('minetrack_gsheets_url') ||
+      DEFAULT_GOOGLE_APPS_SCRIPT_URL;
+
+    readOreGettingFromGoogleSheets(gsUrl)
+      .then((remoteRecords) => {
+        if (cancelled) return;
+        setSheetRecords(remoteRecords);
+      })
+      .catch((error) => {
+        console.warn('Gagal membaca riwayat Ore Getting dari Google Sheets:', error);
+      });
+
+    return () => { cancelled = true; };
+  }, []);
 
   const updateField = (key, value) => {
     setForm((current) => ({
@@ -502,7 +524,7 @@ export default function OreGetting() {
             </thead>
 
             <tbody>
-              {records.length === 0 ? (
+              {sheetRecords.length === 0 ? (
                 <tr>
                   <td
                     colSpan="11"
@@ -512,7 +534,7 @@ export default function OreGetting() {
                   </td>
                 </tr>
               ) : (
-                records.map((record) => (
+                sheetRecords.map((record) => (
                   <tr
                     key={
                       record.id ||

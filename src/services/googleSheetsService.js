@@ -620,6 +620,30 @@ function getSubmissionTimestamp_() {
 
 function rowToItem_(row) {
   const ritToday = Number(row[6]) || 0;
+  let niGradeValue;
+
+  if (Array.isArray(row)) {
+    niGradeValue = row[16];
+  } else if (row && typeof row === 'object') {
+    niGradeValue =
+      row.niGrade ??
+      row['Acuan Ni%'] ??
+      row['Acuan Ni'] ??
+      row.acuanNi ??
+      row.ni ??
+      0;
+  }
+
+  const parsedNiGrade =
+    typeof niGradeValue === 'number'
+      ? (Number.isFinite(niGradeValue) ? niGradeValue : 0)
+      : Number(
+          String(niGradeValue ?? '')
+            .trim()
+            .replace(/%/g, '')
+            .replace(',', '.')
+        );
+  const niGrade = Number.isFinite(parsedNiGrade) ? parsedNiGrade : 0;
 
   return {
     id: 'gs-' + Utilities.getUuid(),
@@ -641,7 +665,7 @@ function rowToItem_(row) {
     material: normalizeMaterial_(String(row[13] || 'Saprolit').trim()) || 'Saprolit',
     equipment: row[14] ? String(row[14]).split(',').map(function(v) { return v.trim(); }).filter(Boolean) : [],
     tonnage: Number(row[15]) || 0,
-    niGrade: parseNumericValue_(row[16]),
+    niGrade: niGrade,
     reporterName: String(row[17] || '').trim(),
     submissionTimestamp: String(row[18] || '').trim()
   };
@@ -650,8 +674,11 @@ function rowToItem_(row) {
 function parseNumericValue_(value) {
   if (value === null || value === undefined || value === '') return 0;
 
-  const text = String(value).trim().replace(/%/g, '').replace(/\\s+/g, '').replace(',', '.');
-  const numeric = Number(text);
+  const text = String(value).trim().replace(/%/g, '').replace(/\s+/g, '');
+  if (!text) return 0;
+
+  const normalized = text.includes(',') ? text.replace(',', '.') : text;
+  const numeric = Number(normalized);
 
   return Number.isFinite(numeric) ? numeric : 0;
 }
@@ -1074,7 +1101,39 @@ export function readLogsFromGoogleSheets(url) {
         reject(new Error(payload?.message || 'Google Apps Script mengembalikan error.'));
         return;
       }
-      resolve(Array.isArray(payload.items) ? payload.items : []);
+
+      const items = Array.isArray(payload.items) ? payload.items : [];
+      const normalizedItems = items.map((item) => {
+        if (Array.isArray(item)) {
+          return rowToItem_(item);
+        }
+
+        if (item && typeof item === 'object') {
+          const nextItem = { ...item };
+          const niGradeValue =
+            item.niGrade ??
+            item['Acuan Ni%'] ??
+            item['Acuan Ni'] ??
+            item.acuanNi ??
+            item.ni ??
+            0;
+          const parsedNiGrade =
+            typeof niGradeValue === 'number'
+              ? (Number.isFinite(niGradeValue) ? niGradeValue : 0)
+              : Number(
+                  String(niGradeValue ?? '')
+                    .trim()
+                    .replace(/%/g, '')
+                    .replace(',', '.')
+                );
+          nextItem.niGrade = Number.isFinite(parsedNiGrade) ? parsedNiGrade : 0;
+          return nextItem;
+        }
+
+        return item;
+      });
+
+      resolve(normalizedItems);
     };
 
     function cleanup() {
@@ -1091,6 +1150,63 @@ export function readLogsFromGoogleSheets(url) {
     // Cache-buster mencegah browser memakai hasil JSONP lama.
     const separator = endpoint.includes('?') ? '&' : '?';
     script.src = endpoint + separator + 'callback=' + encodeURIComponent(callbackName) + '&t=' + Date.now();
+    document.head.appendChild(script);
+  });
+}
+
+export function readOreGettingFromGoogleSheets(url) {
+  const endpoint = normalizeUrl_(url);
+  if (!endpoint) return Promise.reject(new Error('URL Google Apps Script belum diisi.'));
+
+  return new Promise((resolve, reject) => {
+    const callbackName = '__mineTrackOreGetting_' + Date.now() + '_' + Math.random().toString(36).slice(2);
+    const script = document.createElement('script');
+    const timer = window.setTimeout(() => {
+      cleanup();
+      reject(new Error('Timeout saat membaca Ore Getting dari Google Sheets.'));
+    }, 15000);
+
+    function cleanup() {
+      window.clearTimeout(timer);
+      delete window[callbackName];
+      script.remove();
+    }
+
+    window[callbackName] = (payload) => {
+      cleanup();
+      if (!payload || payload.success === false) {
+        reject(new Error(payload?.message || 'Google Sheets mengembalikan error Ore Getting.'));
+        return;
+      }
+
+      const rows = Array.isArray(payload.items) ? payload.items : [];
+      resolve(rows.map((row) => {
+        if (Array.isArray(row)) {
+          return {
+            date: String(row[0] || ''),
+            areaPit: String(row[1] || ''),
+            shift: String(row[2] || ''),
+            metode: String(row[3] || ''),
+            idMetode: String(row[4] || ''),
+            acuan: String(row[5] || ''),
+            titikBor: String(row[6] || ''),
+            blockModel: String(row[7] || ''),
+            elevasi: String(row[8] || ''),
+            submissionTimestamp: String(row[9] || ''),
+          };
+        }
+
+        return row && typeof row === 'object' ? { ...row } : row;
+      }));
+    };
+
+    script.onerror = () => {
+      cleanup();
+      reject(new Error('Web App tidak bisa diakses untuk membaca Ore Getting.'));
+    };
+
+    const separator = endpoint.includes('?') ? '&' : '?';
+    script.src = endpoint + separator + 'type=oregetting&callback=' + encodeURIComponent(callbackName) + '&t=' + Date.now();
     document.head.appendChild(script);
   });
 }
