@@ -18,6 +18,13 @@
     "react-dom": "latest",
     "recharts": "latest"
   },
+  "overrides": {
+    "firebase-admin": {
+      "jwks-rsa": {
+        "jose": "5.10.0"
+      }
+    }
+  },
   "devDependencies": {
     "@vitejs/plugin-react": "latest",
     "vite": "latest",
