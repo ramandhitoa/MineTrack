@@ -5,6 +5,7 @@
 
 import { fmt } from '../utils/formatters';
 import { areaPitOptions } from '../data/initialData';
+import { formatAcuanNiValue, parseAcuanNiValue } from '../utils/acuanNi';
 
 const parseDate = (date) => {
   const text = String(date || '').trim();
@@ -49,10 +50,14 @@ const groupByWeekAndPit = (logs) => {
     if (!weekStart) return;
     const weekKey = formatDate(weekStart);
     const key = `${weekKey}|${log.pit}`;
-    const group = groups.get(key) || { weekKey, weekStart, pit: log.pit, rit: 0, tonnage: 0, ni: 0, mc: 0, count: 0 };
+    const group = groups.get(key) || { weekKey, weekStart, pit: log.pit, rit: 0, tonnage: 0, ni: 0, niCount: 0, mc: 0, count: 0 };
     group.rit += Number(log.ritToday) || 0;
     group.tonnage += Number(log.tonnage) || 0;
-    group.ni += Number(log.niGrade) || 0;
+    const niGrade = parseAcuanNiValue(log.niGrade);
+    if (niGrade !== null) {
+      group.ni += niGrade;
+      group.niCount += 1;
+    }
     group.mc += Number(log.mc) || 0;
     group.count += 1;
     groups.set(key, group);
@@ -90,7 +95,7 @@ export default function Weekly({ logs = [] }) {
           </div>
           <div className="cards4">
             {pitGroup.weeks.map((item) => {
-              const avgNi = item.count ? item.ni / item.count : 0;
+              const avgNi = item.niCount ? item.ni / item.niCount : null;
               const avgMc = item.count ? item.mc / item.count : 0;
               const weekEnd = new Date(item.weekStart);
               weekEnd.setDate(weekEnd.getDate() + 6);
@@ -103,13 +108,13 @@ export default function Weekly({ logs = [] }) {
                     <hr />
 
                     <p>Ritase Ore: <strong>{fmt(item.rit)} Rit</strong></p>
-                    <p>Rata-Rata Kadar Ni: <strong>{avgNi.toFixed(2)}% Ni</strong></p>
+                    <p>Rata-Rata Kadar Ni: <strong>{formatAcuanNiValue(avgNi)}{avgNi === null ? '' : ' Ni'}</strong></p>
                     <p>Rata-Rata MC: <strong>{avgMc.toFixed(2)}%</strong></p>
                     <p>Total Tonase: <strong>{fmt(item.tonnage)} MT</strong></p>
                   </div>
 
                   <span className="status">
-                    {avgNi >= 1.6 ? 'On Spec Target' : 'Need Blending'}
+                    {avgNi === null ? 'Belum ada data Ni' : avgNi >= 1.6 ? 'On Spec Target' : 'Need Blending'}
                   </span>
                 </div>
               );

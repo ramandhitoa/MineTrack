@@ -5,18 +5,24 @@
 
 import { fmt } from '../utils/formatters';
 import { areaPitOptions } from '../data/initialData';
+import {
+  formatAcuanNiValue,
+  getProductionMonthKey,
+  groupAcuanNiAverages,
+  normalizeAcuanNiGroupKey,
+} from '../utils/acuanNi';
 
 const groupByMonthPitAndDumping = (logs) => {
   const groups = new Map();
   logs.forEach((log) => {
-    if (!log.date || !areaPitOptions.includes(log.pit)) return;
-    const month = log.date.slice(0, 7);
+    const month = getProductionMonthKey(log.date);
+    if (!month || !areaPitOptions.includes(log.pit)) return;
+    const monthPitKey = normalizeAcuanNiGroupKey(`${month}|${log.pit}`);
     const dumpingArea = String(log.dumpingArea || '').trim() || 'Tanpa Area Dumpingan';
     const key = `${month}|${log.pit}|${dumpingArea}`;
-    const group = groups.get(key) || { month, pit: log.pit, dumpingArea, rit: 0, tonnage: 0, ni: 0, mc: 0, count: 0 };
+    const group = groups.get(key) || { month, monthPitKey, pit: log.pit, dumpingArea, rit: 0, tonnage: 0, mc: 0, count: 0 };
     group.rit += Number(log.ritToday) || 0;
     group.tonnage += Number(log.tonnage) || 0;
-    group.ni += Number(log.niGrade) || 0;
     group.mc += Number(log.mc) || 0;
     group.count += 1;
     groups.set(key, group);
@@ -30,6 +36,10 @@ const groupByMonthPitAndDumping = (logs) => {
 
 export default function Monthly({ logs = [] }) {
   const groups = groupByMonthPitAndDumping(logs);
+  const niAveragesByMonthPit = groupAcuanNiAverages(logs, (log) => {
+    const month = getProductionMonthKey(log.date);
+    return month ? normalizeAcuanNiGroupKey(`${month}|${log.pit}`) : '';
+  });
 
   return (
     <section>
@@ -63,7 +73,7 @@ export default function Monthly({ logs = [] }) {
                   <td>{item.dumpingArea}</td>
                   <td className="greenText"><b>{fmt(item.rit)}</b></td>
                   <td className="amberText"><b>{fmt(item.tonnage)} MT</b></td>
-                  <td>{(item.ni / item.count).toFixed(2)}%</td>
+                  <td>{formatAcuanNiValue(niAveragesByMonthPit.get(item.monthPitKey))}</td>
                   <td>{(item.mc / item.count).toFixed(2)}%</td>
                   <td>{item.count}</td>
                 </tr>

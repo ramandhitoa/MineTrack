@@ -81,6 +81,7 @@ const ORE_GETTING_HEADERS = [
   'Titik Bor',
   'Block Model',
   'Elevasi',
+  'Jumlah Sampel',
   'Timestamp Pengumpulan'
 ];
 
@@ -219,7 +220,7 @@ function doGet(e) {
 
       var oreLastColumn =
         Math.max(
-          10,
+          ORE_GETTING_HEADERS.length,
           oreSheet.getLastColumn()
         );
 
@@ -233,6 +234,14 @@ function doGet(e) {
             oreLastColumn
           )
           .getDisplayValues();
+
+      var oreSampleCountIndex = oreValues[0].findIndex(function(header) {
+        return String(header || '').trim().toLowerCase() === 'jumlah sampel';
+      });
+      var oreTimestampIndex = oreValues[0].findIndex(function(header) {
+        return String(header || '').trim().toLowerCase() === 'timestamp pengumpulan';
+      });
+      if (oreTimestampIndex < 0) oreTimestampIndex = 9;
 
 
       var oreDataRows =
@@ -251,9 +260,9 @@ function doGet(e) {
             );
 
           })
-          .map(
-            rowToOreGettingItem_
-          );
+          .map(function(row) {
+            return rowToOreGettingItem_(row, oreSampleCountIndex, oreTimestampIndex);
+          });
 
 
       return respond_(
@@ -310,6 +319,10 @@ function doGet(e) {
 
 
     var startRow = 0;
+    var acuanNiIndex = values[0].findIndex(function(header) {
+      return ['acuan ni%', 'acuan ni'].indexOf(String(header || '').trim().toLowerCase()) !== -1;
+    });
+    if (acuanNiIndex < 0) acuanNiIndex = 16;
 
 
     if (
@@ -341,9 +354,9 @@ function doGet(e) {
             });
 
         })
-        .map(
-          rowToItem_
-        );
+        .map(function(row) {
+          return rowToItem_(row, acuanNiIndex);
+        });
 
 
     return respond_(
@@ -2090,6 +2103,11 @@ function saveOreGetting_(
   }
 
 
+  if (!hasOreGettingHeaders_(sheet)) {
+    throw new Error('Header Laporan Ore Getting harus: Tanggal, Area PIT, Shift, Metode, ID Metode, Acuan, Titik Bor, Block Model, Elevasi, Jumlah Sampel, Timestamp Pengumpulan');
+  }
+
+
   var rows =
     items.map(
       function(item) {
@@ -2098,26 +2116,19 @@ function saveOreGetting_(
           Array.isArray(item)
         ) {
 
-          var row =
-            item.slice(
-              0,
-              ORE_GETTING_HEADERS.length - 1
-            );
-
-
-          while (
-            row.length <
-            ORE_GETTING_HEADERS.length - 1
-          ) {
-
-            row.push('');
-
-          }
-
-
-          row.push(
+          var row = [
+            item[0] || '',
+            item[1] || '',
+            item[2] || '',
+            item[3] || '',
+            item[4] || '',
+            item[5] || '',
+            item[6] || '',
+            item[7] || '',
+            item[8] || '',
+            parseOreGettingSampleCount_(item[9]) ?? '',
             submittedAt
-          );
+          ];
 
 
           return row;
@@ -2264,20 +2275,11 @@ function getOreGettingSheet_() {
 
 
   if (!sheet) {
-
-    sheet =
-      ss.insertSheet(
-        ORE_GETTING_SHEET_NAME,
-        2
-      );
-
+    sheet = ss.insertSheet(ORE_GETTING_SHEET_NAME, 2);
+    sheet.getRange(1, 1, 1, ORE_GETTING_HEADERS.length).setValues([ORE_GETTING_HEADERS]);
+  } else if (sheet.getLastRow() === 0) {
+    sheet.getRange(1, 1, 1, ORE_GETTING_HEADERS.length).setValues([ORE_GETTING_HEADERS]);
   }
-
-
-  ensureHeaders_(
-    sheet,
-    ORE_GETTING_HEADERS
-  );
 
 
   return sheet;
@@ -2730,9 +2732,7 @@ function itemToRow_(
       item.tonnage
     ) || 0,
 
-    Number(
-      item.niGrade
-    ) || 0,
+    parseAcuanNiValue_(item.niGrade) ?? '',
 
     item.reporterName ||
       item.reporter ||
@@ -2792,10 +2792,32 @@ function oreGettingToRow_(
     item.elevasi ||
       '',
 
+    parseOreGettingSampleCount_(item.jumlahSampel) ?? '',
+
     submittedAt
 
   ];
 
+}
+
+function parseOreGettingSampleCount_(value) {
+  if (value === null || value === undefined || value === '') return null;
+  if (typeof value === 'number') return isFinite(value) && value >= 0 ? value : null;
+
+  var text = String(value).trim().replace(/\s+/g, '').replace(',', '.');
+  if (!text || !/^(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i.test(text)) return null;
+
+  var count = Number(text);
+  return isFinite(count) && count >= 0 ? count : null;
+}
+
+function hasOreGettingHeaders_(sheet) {
+  if (!sheet || sheet.getLastRow() === 0) return false;
+
+  var actual = sheet.getRange(1, 1, 1, ORE_GETTING_HEADERS.length).getDisplayValues()[0];
+  return ORE_GETTING_HEADERS.every(function(header, index) {
+    return String(actual[index] || '').trim().toLowerCase() === header.toLowerCase();
+  });
 }
 
 
@@ -2804,7 +2826,8 @@ function oreGettingToRow_(
 // ============================================================
 
 function rowToItem_(
-  row
+  row,
+  acuanNiIndex
 ) {
 
   var ritToday =
@@ -2921,9 +2944,9 @@ function rowToItem_(
       ) || 0,
 
     niGrade:
-      Number(
-        row[16]
-      ) || 0,
+      parseAcuanNiValue_(
+        row[acuanNiIndex]
+      ),
 
     reporterName:
       String(
@@ -2937,6 +2960,20 @@ function rowToItem_(
 
   };
 
+}
+
+function parseAcuanNiValue_(value) {
+  if (value === null || value === undefined) return null;
+  if (typeof value === 'number') return isFinite(value) && value >= 0 ? value : null;
+
+  var text = String(value).trim().replace(/%/g, '').replace(/\s+/g, '');
+  if (!text) return null;
+
+  var normalized = text.replace(',', '.');
+  if (!/^(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i.test(normalized)) return null;
+
+  var numeric = Number(normalized);
+  return isFinite(numeric) && numeric >= 0 ? numeric : null;
 }
 
 
@@ -2995,7 +3032,9 @@ function normalizeMaterial_(
 // ============================================================
 
 function rowToOreGettingItem_(
-  row
+  row,
+  sampleCountIndex,
+  timestampIndex
 ) {
 
   return {
@@ -3045,9 +3084,14 @@ function rowToOreGettingItem_(
         row[8] || ''
       ).trim(),
 
+    jumlahSampel:
+      sampleCountIndex >= 0
+        ? parseOreGettingSampleCount_(row[sampleCountIndex])
+        : null,
+
     submissionTimestamp:
       String(
-        row[9] || ''
+        row[timestampIndex] || ''
       ).trim()
 
   };

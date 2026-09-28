@@ -125,10 +125,10 @@ export function DailyModal({ data, setData, onClose, onSave }) {
             </Field>
             <Field label="Acuan Ni%">
               <input
-                type="number"
-                step="0.01"
-                value={data.niGrade}
-                onChange={(e) => update('niGrade', Number(e.target.value))}
+                type="text"
+                inputMode="decimal"
+                value={data.niGrade ?? ''}
+                onChange={(e) => update('niGrade', e.target.value)}
               />
             </Field>
             <Field label="Nama Pelapor">

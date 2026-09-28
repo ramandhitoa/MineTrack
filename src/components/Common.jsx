@@ -6,6 +6,11 @@
 
 import { Trash2 } from 'lucide-react';
 import { fmt, materialClass } from '../utils/formatters';
+import {
+  formatAcuanNiValue,
+  groupAcuanNiAverages,
+  normalizeAcuanNiGroupKey,
+} from '../utils/acuanNi';
 
 export function Card({ label, value, unit, sub, accent }) {
   return (
@@ -19,7 +24,10 @@ export function Card({ label, value, unit, sub, accent }) {
   );
 }
 
-export function LogTable({ logs, onDelete }) {
+export function LogTable({ logs = [], averageLogs = logs, onDelete }) {
+  const dumpingAverages = groupAcuanNiAverages(averageLogs, (log) => log.dumpingArea);
+  const pitAverages = groupAcuanNiAverages(averageLogs, (log) => log.pit);
+
   return (
     <div className="tableWrap">
       <table>
@@ -35,6 +43,8 @@ export function LogTable({ logs, onDelete }) {
             <th className="num">Total Rit</th>
             <th className="num">Tonase</th>
             <th>Acuan Ni</th>
+            <th>Rata-rata Ni Dumping</th>
+            <th>Rata-rata Ni PIT</th>
             {onDelete && <th>Aksi</th>}
           </tr>
         </thead>
@@ -43,7 +53,7 @@ export function LogTable({ logs, onDelete }) {
           {logs.length === 0 ? (
             <tr>
               <td
-                colSpan={onDelete ? 11 : 10}
+                colSpan={onDelete ? 13 : 12}
                 className="emptyState"
               >
                 Belum ada data.
@@ -51,7 +61,9 @@ export function LogTable({ logs, onDelete }) {
             </tr>
           ) : (
             logs.map((log) => {
-              const acuanNi = Number(log.niGrade ?? 0);
+              const acuanNi = log.niGrade;
+              const dumpingAverage = dumpingAverages.get(normalizeAcuanNiGroupKey(log.dumpingArea));
+              const pitAverage = pitAverages.get(normalizeAcuanNiGroupKey(log.pit));
 
               return (
                 <tr key={log.id}>
@@ -126,15 +138,18 @@ export function LogTable({ logs, onDelete }) {
                 {/* ACUAN NI */}
                 <td
                   className={
-                    acuanNi >= 1.6
+                    Number(acuanNi) >= 1.6
                       ? 'greenText'
                       : 'amberText'
                   }
                 >
                   <b>
-                    {acuanNi.toFixed(2)}%
+                    {formatAcuanNiValue(acuanNi)}
                   </b>
                 </td>
+
+                <td><b>{formatAcuanNiValue(dumpingAverage)}</b></td>
+                <td><b>{formatAcuanNiValue(pitAverage)}</b></td>
 
                 {/* AKSI */}
                 {onDelete && (

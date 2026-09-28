@@ -37,7 +37,7 @@ export default function Dashboard({ metrics, logs, chartData, loadingStats, pend
           label="Estimasi Tonase Ore (MT)"
           value={fmt(metrics.ton)}
           unit="MT"
-          sub={`Rata-Rata Ni: ${metrics.ni}% Ni`}
+          sub={`Rata-Rata Ni: ${metrics.ni ?? '-'}${metrics.ni === null ? '' : '% Ni'}`}
           accent="amber"
         />
         <Card
@@ -68,7 +68,7 @@ export default function Dashboard({ metrics, logs, chartData, loadingStats, pend
             Buka Semua Log Harian →
           </button>
         </div>
-        <LogTable logs={logs.slice(0, 5)} />
+        <LogTable logs={logs.slice(0, 5)} averageLogs={logs} />
       </div>
     </section>
   );

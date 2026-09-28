@@ -19,6 +19,8 @@
 // (klik dobel / retry jaringan) selalu lolos jadi baris duplikat.
 // ============================================================
 
+import { normalizeProductionNiRecord } from '../utils/acuanNi.js';
+
 // ID Google Spreadsheet pengguna.
 export const GOOGLE_SPREADSHEET_ID = '18oh2WCDf5p6xSyE1_sDOxCSY6HtV87fpMoEfhDm9cRs';
 
@@ -148,6 +150,7 @@ const ORE_GETTING_HEADERS = [
   'Titik Bor',
   'Block Model',
   'Elevasi',
+  'Jumlah Sampel',
   'Timestamp Pengumpulan'
 ];
 
@@ -196,10 +199,13 @@ function doGet(e) {
         return respond_({ success: true, items: [], values: [], count: 0 }, getCallback_(e));
       }
 
-      const values = oreSheet.getRange(1, 1, lastRow, Math.max(10, oreSheet.getLastColumn())).getDisplayValues();
+      const values = oreSheet.getRange(1, 1, lastRow, Math.max(ORE_GETTING_HEADERS.length, oreSheet.getLastColumn())).getDisplayValues();
+      const sampleCountIndex = values[0].findIndex(header => String(header || '').trim().toLowerCase() === 'jumlah sampel');
+      let timestampIndex = values[0].findIndex(header => String(header || '').trim().toLowerCase() === 'timestamp pengumpulan');
+      if (timestampIndex < 0) timestampIndex = 9;
       const dataRows = values.slice(1)
         .filter(row => row.some(value => String(value).trim() !== ''))
-        .map(rowToOreGettingItem_);
+        .map(row => rowToOreGettingItem_(row, sampleCountIndex, timestampIndex));
       return respond_({ success: true, items: dataRows, values: dataRows, count: dataRows.length }, getCallback_(e));
     }
 
@@ -212,13 +218,15 @@ function doGet(e) {
     }
 
     const values = sheet.getRange(1, 1, lastRow, lastCol).getDisplayValues();
+    let acuanNiIndex = values[0].findIndex(header => ['acuan ni%', 'acuan ni'].includes(String(header || '').trim().toLowerCase()));
+    if (acuanNiIndex < 0) acuanNiIndex = 16;
     let startRow = 0;
     if (looksLikeHeader_(values[0])) startRow = 1;
 
     const items = values
       .slice(startRow)
       .filter(row => row.slice(0, HEADERS.length).some(value => String(value).trim() !== ''))
-      .map(rowToItem_);
+      .map(row => rowToItem_(row, acuanNiIndex));
 
     return respond_({ success: true, items: items, count: items.length }, getCallback_(e));
   } catch (error) {
@@ -525,11 +533,26 @@ function saveOreGetting_(payload) {
     return respond_({ success: true, message: 'Tidak ada data Ore Getting baru.', sheet: ORE_GETTING_SHEET_NAME, count: 0 }, '');
   }
 
+  if (!hasOreGettingHeaders_(sheet)) {
+    return respond_({
+      success: false,
+      message: 'Header Ore Getting harus berurutan dengan Jumlah Sampel di kolom J dan Timestamp Pengumpulan di kolom K.',
+      sheet: ORE_GETTING_SHEET_NAME,
+      count: 0,
+    }, '');
+  }
+
   const rows = items.map(function(item) {
     if (Array.isArray(item)) {
-      const row = item.slice(0, ORE_GETTING_HEADERS.length - 1);
-      while (row.length < ORE_GETTING_HEADERS.length - 1) row.push('');
-      row.push(item.length >= ORE_GETTING_HEADERS.length ? item[ORE_GETTING_HEADERS.length - 1] || submittedAt : submittedAt);
+      const row = item.slice(0, 9);
+      while (row.length < 9) row.push('');
+      if (item.length >= 11) {
+        row.push(parseOreGettingSampleCount_(item[9]) ?? '');
+        row.push(item[10] || submittedAt);
+      } else {
+        row.push('');
+        row.push(item[9] || submittedAt);
+      }
       return row;
     }
     return oreGettingToRow_(item, submittedAt);
@@ -628,7 +651,7 @@ function itemToRow_(item, submittedAt) {
     normalizeMaterial_(item.material || 'Saprolit'),
     Array.isArray(item.equipment) ? item.equipment.join(', ') : (item.equipment || ''),
     Number(item.tonnage) || 0,
-    parseNumericValue_(item.niGrade),
+    parseAcuanNiValue_(item.niGrade) ?? '',
     item.reporterName || item.reporter || '',
     item.submissionTimestamp || submittedAt
   ];
@@ -647,8 +670,29 @@ function oreGettingToRow_(item, submittedAt) {
     item.titikBor || '',
     item.blockModel || '',
     item.elevasi || '',
+    parseOreGettingSampleCount_(item.jumlahSampel) ?? '',
     item.submissionTimestamp || item.createdAt || item.timestamp || submittedAt
   ];
+}
+
+function parseOreGettingSampleCount_(value) {
+  if (value === null || value === undefined || value === '') return null;
+  if (typeof value === 'number') return Number.isFinite(value) && value >= 0 ? value : null;
+
+  const text = String(value).trim().replace(/\s+/g, '').replace(',', '.');
+  if (!text || !/^(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i.test(text)) return null;
+
+  const count = Number(text);
+  return Number.isFinite(count) && count >= 0 ? count : null;
+}
+
+function hasOreGettingHeaders_(sheet) {
+  if (!sheet || sheet.getLastRow() === 0) return false;
+
+  const actual = sheet.getRange(1, 1, 1, ORE_GETTING_HEADERS.length).getDisplayValues()[0];
+  return ORE_GETTING_HEADERS.every((header, index) => (
+    String(actual[index] || '').trim().toLowerCase() === header.toLowerCase()
+  ));
 }
 
 function getSubmissionTimestamp_() {
@@ -659,32 +703,8 @@ function getSubmissionTimestamp_() {
   );
 }
 
-function rowToItem_(row) {
+function rowToItem_(row, acuanNiIndex) {
   const ritToday = Number(row[6]) || 0;
-  let niGradeValue;
-
-  if (Array.isArray(row)) {
-    niGradeValue = row[16];
-  } else if (row && typeof row === 'object') {
-    niGradeValue =
-      row.niGrade ??
-      row['Acuan Ni%'] ??
-      row['Acuan Ni'] ??
-      row.acuanNi ??
-      row.ni ??
-      0;
-  }
-
-  const parsedNiGrade =
-    typeof niGradeValue === 'number'
-      ? (Number.isFinite(niGradeValue) ? niGradeValue : 0)
-      : Number(
-          String(niGradeValue ?? '')
-            .trim()
-            .replace(/%/g, '')
-            .replace(',', '.')
-        );
-  const niGrade = Number.isFinite(parsedNiGrade) ? parsedNiGrade : 0;
 
   return {
     id: 'gs-' + Utilities.getUuid(),
@@ -706,22 +726,24 @@ function rowToItem_(row) {
     material: normalizeMaterial_(String(row[13] || 'Saprolit').trim()) || 'Saprolit',
     equipment: row[14] ? String(row[14]).split(',').map(function(v) { return v.trim(); }).filter(Boolean) : [],
     tonnage: Number(row[15]) || 0,
-    niGrade: niGrade,
+    niGrade: parseAcuanNiValue_(row[acuanNiIndex]),
     reporterName: String(row[17] || '').trim(),
     submissionTimestamp: String(row[18] || '').trim()
   };
 }
 
-function parseNumericValue_(value) {
-  if (value === null || value === undefined || value === '') return 0;
+function parseAcuanNiValue_(value) {
+  if (value === null || value === undefined) return null;
+  if (typeof value === 'number') return Number.isFinite(value) && value >= 0 ? value : null;
 
   const text = String(value).trim().replace(/%/g, '').replace(/\s+/g, '');
-  if (!text) return 0;
+  if (!text) return null;
 
-  const normalized = text.includes(',') ? text.replace(',', '.') : text;
+  const normalized = text.replace(',', '.');
+  if (!/^(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i.test(normalized)) return null;
+
   const numeric = Number(normalized);
-
-  return Number.isFinite(numeric) ? numeric : 0;
+  return Number.isFinite(numeric) && numeric >= 0 ? numeric : null;
 }
 
 function normalizeMaterial_(value) {
@@ -732,7 +754,7 @@ function normalizeMaterial_(value) {
   return normalized;
 }
 
-function rowToOreGettingItem_(row) {
+function rowToOreGettingItem_(row, sampleCountIndex, timestampIndex) {
   return {
     date: formatDate_(row[0]),
     areaPit: String(row[1] || '').trim(),
@@ -743,7 +765,8 @@ function rowToOreGettingItem_(row) {
     titikBor: String(row[6] || '').trim(),
     blockModel: String(row[7] || '').trim(),
     elevasi: String(row[8] || '').trim(),
-    submissionTimestamp: String(row[9] || '').trim()
+    jumlahSampel: sampleCountIndex >= 0 ? parseOreGettingSampleCount_(row[sampleCountIndex]) : null,
+    submissionTimestamp: String(row[timestampIndex] || '').trim()
   };
 }
 
@@ -1178,29 +1201,11 @@ export function readLogsFromGoogleSheets(url) {
       const items = Array.isArray(payload.items) ? payload.items : [];
       const normalizedItems = items.map((item) => {
         if (Array.isArray(item)) {
-          return rowToItem_(item);
+          return normalizeProductionNiRecord(item);
         }
 
         if (item && typeof item === 'object') {
-          const nextItem = { ...item };
-          const niGradeValue =
-            item.niGrade ??
-            item['Acuan Ni%'] ??
-            item['Acuan Ni'] ??
-            item.acuanNi ??
-            item.ni ??
-            0;
-          const parsedNiGrade =
-            typeof niGradeValue === 'number'
-              ? (Number.isFinite(niGradeValue) ? niGradeValue : 0)
-              : Number(
-                  String(niGradeValue ?? '')
-                    .trim()
-                    .replace(/%/g, '')
-                    .replace(',', '.')
-                );
-          nextItem.niGrade = Number.isFinite(parsedNiGrade) ? parsedNiGrade : 0;
-          return nextItem;
+          return normalizeProductionNiRecord(item);
         }
 
         return item;
@@ -1225,6 +1230,17 @@ export function readLogsFromGoogleSheets(url) {
     script.src = endpoint + separator + 'callback=' + encodeURIComponent(callbackName) + '&t=' + Date.now();
     document.head.appendChild(script);
   });
+}
+
+function parseOreGettingSampleCountValue_(value) {
+  if (value === null || value === undefined || value === '') return null;
+  if (typeof value === 'number') return Number.isFinite(value) && value >= 0 ? value : null;
+
+  const text = String(value).trim().replace(/\s+/g, '').replace(',', '.');
+  if (!text || !/^(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i.test(text)) return null;
+
+  const count = Number(text);
+  return Number.isFinite(count) && count >= 0 ? count : null;
 }
 
 export function readOreGettingFromGoogleSheets(url) {
@@ -1265,7 +1281,8 @@ export function readOreGettingFromGoogleSheets(url) {
             titikBor: String(row[6] || ''),
             blockModel: String(row[7] || ''),
             elevasi: String(row[8] || ''),
-            submissionTimestamp: String(row[9] || ''),
+            jumlahSampel: row.length >= 11 ? parseOreGettingSampleCountValue_(row[9]) : null,
+            submissionTimestamp: String(row[row.length >= 11 ? 10 : 9] || ''),
           };
         }
 

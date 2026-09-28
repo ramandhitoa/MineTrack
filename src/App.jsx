@@ -39,6 +39,7 @@ import {
   initialPending,
 } from './data/initialData';
 import { calculateShiftHours, toWitaDateInput } from './utils/formatters';
+import { normalizeProductionNiRecord, parseAcuanNiValue } from './utils/acuanNi';
 import { copyLogsAsTSV, exportLogsAsCSV } from './services/exportService';
 import {
   attendanceKey,
@@ -331,6 +332,7 @@ export default function App() {
       total: 0,
       ton: 0,
       weightedNi: 0,
+      niTonnage: 0,
       mc: 0,
       hours: 0,
     };
@@ -339,14 +341,19 @@ export default function App() {
       result.rit += Number(log.ritToday) || 0;
       result.total += Number(log.ritTotal) || 0;
       result.ton += Number(log.tonnage) || 0;
-      result.weightedNi += (Number(log.tonnage) || 0) * (Number(log.niGrade) || 0);
+      const niGrade = parseAcuanNiValue(log.niGrade);
+      if (niGrade !== null) {
+        const niTonnage = Number(log.tonnage) || 0;
+        result.weightedNi += niTonnage * niGrade;
+        result.niTonnage += niTonnage;
+      }
       result.mc += Number(log.mc) || 0;
       result.hours += calculateShiftHours(log.startTime, log.stopTime);
     });
 
     return {
       ...result,
-      ni: result.ton ? (result.weightedNi / result.ton).toFixed(2) : '0.00',
+      ni: result.niTonnage ? (result.weightedNi / result.niTonnage).toFixed(2) : null,
       mc: (result.mc / (logs.length || 1)).toFixed(1),
       hours: Math.round(result.hours),
     };
@@ -378,7 +385,7 @@ export default function App() {
       .map((log) => ({
         name: `${log.date?.split('-').reverse().join('/')} ${log.sublot}`,
         rit: Number(log.ritToday) || 0,
-        ni: Number(log.niGrade) || 0,
+        ni: parseAcuanNiValue(log.niGrade),
       }))
   ), [logs]);
 
@@ -505,9 +512,14 @@ export default function App() {
     const ritToday = Number(dailyForm.ritToday) || 0;
     const ritTotal = ritPrevious + ritToday;
 
-    const parsedNiGrade = Number.isFinite(Number(dailyForm.niGrade)) ? Number(dailyForm.niGrade) : 0;
+    const rawNiGrade = String(dailyForm.niGrade ?? '').trim();
+    const parsedNiGrade = parseAcuanNiValue(dailyForm.niGrade);
+    if (rawNiGrade && parsedNiGrade === null) {
+      notify('Acuan Ni harus berupa angka valid.');
+      return;
+    }
 
-    const newLog = {
+    const newLog = normalizeProductionNiRecord({
       ...dailyForm,
       id: Date.now(),
       recordId: createProductionRecordId(),
@@ -520,7 +532,7 @@ export default function App() {
       niGrade: parsedNiGrade,
       feGrade: Number(dailyForm.feGrade) || 0,
       mc: Number(dailyForm.mc) || 0,
-    };
+    });
 
     const nextLogs = [newLog, ...logs];
 
