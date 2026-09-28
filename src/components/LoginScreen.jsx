@@ -31,7 +31,7 @@ export default function LoginScreen({ onLogin, error, loading = false }) {
       >
         <div style={{ marginBottom: '18px' }}>
           <div style={{ fontSize: '12px', letterSpacing: '0.2em', textTransform: 'uppercase', color: 'var(--primary,#60a5fa)', marginBottom: '8px' }}>
-            MineTrack
+            GC PIT REPORT
           </div>
           <h1 style={{ margin: 0, fontSize: '28px' }}>Secure Login</h1>
         </div>

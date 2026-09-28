@@ -13,12 +13,38 @@ service cloud.firestore {
       return isSignedIn() ? currentUserProfile().role : null;
     }
 
+    function isActiveUser() {
+      return isSignedIn() && currentUserProfile().status == 'ACTIVE';
+    }
+
     function isOwner() {
-      return currentUserRole() == 'OWNER';
+      return isActiveUser() && currentUserRole() == 'OWNER';
     }
 
     function isAppAdmin() {
-      return currentUserRole() == 'APP_ADMIN';
+      return isActiveUser() && currentUserRole() == 'APP_ADMIN';
+    }
+
+    function validAccountStatus(status) {
+      return status in ['ACTIVE', 'DISABLED'];
+    }
+
+    function ownerCanUpdateManagedAccount() {
+      return isOwner()
+        && resource.data.role in ['USER', 'APP_ADMIN']
+        && request.resource.data.role in ['USER', 'APP_ADMIN']
+        && validAccountStatus(request.resource.data.status)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['role', 'status', 'updatedAt'])
+        && request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'status']);
+    }
+
+    function appAdminCanUpdateUserStatus() {
+      return isAppAdmin()
+        && resource.data.role == 'USER'
+        && request.resource.data.role == 'USER'
+        && validAccountStatus(request.resource.data.status)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt'])
+        && request.resource.data.diff(resource.data).affectedKeys().hasAny(['status']);
     }
 
     function isOwnProfile(uid) {
@@ -34,7 +60,8 @@ service cloud.firestore {
         || (isAppAdmin() && resource.data.role == 'USER');
 
       allow create: if false;
-      allow update: if false;
+      allow update: if ownerCanUpdateManagedAccount()
+        || appAdminCanUpdateUserStatus();
       allow delete: if false;
     }
 

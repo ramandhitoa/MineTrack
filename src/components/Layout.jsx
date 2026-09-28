@@ -41,6 +41,7 @@ function getRoleNavigation(role) {
       ...baseNavigation,
       ['admin-users', 'Manajemen User'],
       ['admin-master', 'Master User'],
+      ['admin-settings', 'Pengaturan'],
     ];
   }
 
@@ -166,19 +167,19 @@ function Sidebar({ activeTab, setActiveTab, mobileNav, setMobileNav, pendingCoun
     <aside className={mobileNav ? 'sidebar open' : 'sidebar'}>
       <div>
         <div className="brand">
-          <div className="brandIcon" aria-label="Grade Control AKP">
+          <div className="brandIcon" aria-label="GC PIT REPORT">
             <Mountain size={20} />
             <Crosshair size={10} className="brandCrosshair" />
           </div>
           <div>
-            <b>Grade Control AKP</b>
-            <span>Geology & QC</span>
+            <b>GC PIT REPORT</b>
+            <span>PRODUCTION, ORE GETTING & ABSEN</span>
           </div>
         </div>
 
         <nav>
           {navigation.map(([id, label], index) => {
-            const adminMenuIds = ['owner-users', 'owner-master', 'owner-settings', 'admin-users', 'admin-master'];
+            const adminMenuIds = ['owner-users', 'owner-master', 'owner-settings', 'admin-users', 'admin-master', 'admin-settings'];
             const isAdminMenu = adminMenuIds.includes(id);
             const tabMap = {
               dashboard: 'dashboard',
@@ -194,6 +195,7 @@ function Sidebar({ activeTab, setActiveTab, mobileNav, setMobileNav, pendingCoun
               'owner-settings': 'owner-settings',
               'admin-users': 'admin-users',
               'admin-master': 'admin-master',
+              'admin-settings': 'admin-settings',
             };
 
             const iconMap = {
@@ -210,6 +212,7 @@ function Sidebar({ activeTab, setActiveTab, mobileNav, setMobileNav, pendingCoun
               'owner-settings': Settings2,
               'admin-users': UserCheck,
               'admin-master': UserCheck,
+              'admin-settings': Settings2,
             };
 
             const Icon = iconMap[id] || Mountain;
@@ -264,7 +267,7 @@ function Sidebar({ activeTab, setActiveTab, mobileNav, setMobileNav, pendingCoun
         </div>
       </div>
 
-      <footer>Grade Control AKP v3.0 • QC & Spreadsheet Sync</footer>
+      <footer>GC PIT REPORT v3.0 • QC & Spreadsheet Sync</footer>
     </aside>
   );
 }
@@ -282,7 +285,9 @@ function Header({ title, setMobileNav, theme, onThemeChange, onInputDaily, onInp
           <h1>{title}</h1>
           {user && (
             <div className="userMetaCard">
-              <span className="userName">{user.name || 'MineTrack User'}</span>
+              <span className="userName">
+                {user.name && user.name !== 'MineTrack User' ? user.name : 'GC PIT REPORT User'}
+              </span>
               <span className="userNik">{user.nik || '-'}</span>
               <span className={`userRoleBadge role-${currentRole}`}>
                 {currentRole}

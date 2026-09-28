@@ -1,7 +1,8 @@
 import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from 'firebase/auth';
-import { doc, getDoc, getFirestore } from 'firebase/firestore';
+import { doc, getDoc, getFirestore, onSnapshot, serverTimestamp, updateDoc } from 'firebase/firestore';
 
 import { firebaseApp, isFirebaseClientConfigured } from '../firebase/client.js';
+import { canManageAccountAction } from './accountAuthorization.js';
 
 export const APP_ROLES = Object.freeze({
   OWNER: 'OWNER',
@@ -63,6 +64,54 @@ export function getFirebaseDbInstance() {
   }
 
   return getFirestore(firebaseApp);
+}
+
+export async function updateManagedAccount({ actorRole, targetUid, targetRole, action, value }) {
+  if (!canManageAccountAction({ actorRole, targetRole, action, value })) {
+    throw new Error('You are not allowed to perform this account action.');
+  }
+
+  if (!targetUid) {
+    throw new Error('Target account is invalid.');
+  }
+
+  const updates = action === 'status' ? { status: value } : { role: value };
+  await updateDoc(doc(getFirebaseDbInstance(), 'users', targetUid), {
+    ...updates,
+    updatedAt: serverTimestamp(),
+  });
+}
+
+export async function createManagedAccount({ nik, name, role }) {
+  const auth = getFirebaseAuthInstance();
+  const currentUser = auth.currentUser;
+  if (!currentUser) {
+    throw new Error('Sesi tidak tersedia. Silakan login kembali.');
+  }
+
+  const idToken = await currentUser.getIdToken();
+  const response = await fetch('/api/admin/accounts', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${idToken}`,
+      'Content-Type': 'application/json',
+    },
+    cache: 'no-store',
+    body: JSON.stringify({ nik, name, role }),
+  });
+
+  let result;
+  try {
+    result = await response.json();
+  } catch {
+    throw new Error('Server memberikan respons yang tidak valid.');
+  }
+
+  if (!response.ok || result?.success !== true || !result.account) {
+    throw new Error(result?.message || 'Akun gagal dibuat. Silakan coba kembali.');
+  }
+
+  return result.account;
 }
 
 export async function loadMineTrackUserProfile(uid, callSource = 'unknown') {
@@ -205,52 +254,59 @@ export function observeFirebaseAuthSession({ onSession, onError }) {
   }
 
   const auth = getFirebaseAuthInstance();
+  let unsubscribeProfile = null;
 
-  const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+  const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+    unsubscribeProfile?.();
+    unsubscribeProfile = null;
+
     if (!firebaseUser) {
       onSession?.(null);
       return;
     }
 
-    try {
-      const profile = await loadMineTrackUserProfile(firebaseUser.uid, 'onAuthStateChanged flow');
+    const uid = firebaseUser.uid;
+    unsubscribeProfile = onSnapshot(
+      doc(getFirebaseDbInstance(), 'users', uid),
+      async (snapshot) => {
+        if (auth.currentUser?.uid !== uid) return;
 
-      if (!profile) {
-        await signOut(auth);
-        onSession?.(null);
-        onError?.('Account is not configured.');
-        return;
-      }
+        const profile = snapshot.exists() ? snapshot.data() : null;
+        if (!profile || profile.status !== USER_STATUS.ACTIVE) {
+          await signOut(auth).catch(() => {});
+          onSession?.(null);
+          onError?.(profile ? 'This account is currently disabled.' : 'Account is not configured.');
+          return;
+        }
 
-      if (profile.status !== USER_STATUS.ACTIVE) {
-        await signOut(auth);
-        onSession?.(null);
-        onError?.('This account is currently disabled.');
-        return;
-      }
+        const safeUser = sanitizeAuthUser({
+          uid,
+          nik: profile.nik || '',
+          name: profile.name || firebaseUser.displayName || 'MineTrack User',
+          role: profile.role || APP_ROLES.USER,
+          status: profile.status,
+        });
 
-      const safeUser = sanitizeAuthUser({
-        uid: firebaseUser.uid,
-        nik: profile.nik || '',
-        name: profile.name || firebaseUser.displayName || 'MineTrack User',
-        role: profile.role || APP_ROLES.USER,
-        status: profile.status || USER_STATUS.ACTIVE,
-      });
+        if (!safeUser) {
+          await signOut(auth).catch(() => {});
+          onSession?.(null);
+          onError?.('Authentication failed.');
+          return;
+        }
 
-      if (!safeUser) {
-        await signOut(auth);
+        onSession?.({ user: safeUser, firebaseUser, profile });
+      },
+      async () => {
+        if (auth.currentUser?.uid !== uid) return;
+        await signOut(auth).catch(() => {});
         onSession?.(null);
         onError?.('Authentication failed.');
-        return;
       }
-
-      onSession?.({ user: safeUser, firebaseUser, profile });
-    } catch (error) {
-      await signOut(auth).catch(() => {});
-      onSession?.(null);
-      onError?.('Authentication failed.');
-    }
+    );
   });
 
-  return unsubscribe;
+  return () => {
+    unsubscribe();
+    unsubscribeProfile?.();
+  };
 }

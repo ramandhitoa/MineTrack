@@ -18,6 +18,7 @@ import {
 } from './offlineDB';
 
 import {
+  withProductionRecordIds,
   syncLogsToGoogleSheets,
   syncAttendanceToGoogleSheets,
 } from './googleSheetsService';
@@ -65,12 +66,12 @@ async function syncOneItem(item, gsUrl) {
       type === 'produksi'
     ) {
 
-      await syncLogsToGoogleSheets(
-        gsUrl,
-        Array.isArray(payload)
-          ? payload
-          : [payload]
+      const productionItems = withProductionRecordIds(
+        Array.isArray(payload) ? payload : [payload],
+        item.id
       );
+
+      await syncLogsToGoogleSheets(gsUrl, productionItems);
 
       await deletePendingData(item.id);
 

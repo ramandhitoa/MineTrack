@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { collection, getDocs, getFirestore, query, where } from 'firebase/firestore';
 
+import { canManageAccountAction } from '../auth/accountAuthorization.js';
+import { updateManagedAccount } from '../auth/authService.js';
 import { firebaseApp, isFirebaseClientConfigured } from '../firebase/client.js';
 
 function formatLastLogin(value) {
@@ -27,7 +29,7 @@ function formatLastLogin(value) {
   return 'Belum pernah login';
 }
 
-export default function MasterAkunPage({ role = 'OWNER' }) {
+export default function MasterAkunPage({ role = 'USER' }) {
   const [users, setUsers] = useState([]);
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState('Semua');
@@ -35,6 +37,30 @@ export default function MasterAkunPage({ role = 'OWNER' }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [busyUid, setBusyUid] = useState('');
+
+  const updateAccount = async (user, action, value) => {
+    setBusyUid(user.id);
+    setNotice('');
+
+    try {
+      await updateManagedAccount({
+        actorRole: role,
+        targetUid: user.id,
+        targetRole: user.role,
+        action,
+        value,
+      });
+      setUsers((current) => current.map((item) => (
+        item.id === user.id ? { ...item, [action]: value } : item
+      )));
+      setNotice('Perubahan akun berhasil disimpan.');
+    } catch (updateError) {
+      setNotice(updateError?.message || 'Perubahan akun ditolak.');
+    } finally {
+      setBusyUid('');
+    }
+  };
 
   useEffect(() => {
     let mounted = true;
@@ -203,20 +229,44 @@ export default function MasterAkunPage({ role = 'OWNER' }) {
                   <td>{user.nik || '-'}</td>
                   <td>
                     <span className={`rolePill role-${user.role || 'USER'}`}>{user.role || 'USER'}</span>
+                    {role === 'OWNER' && user.role !== 'OWNER' && (
+                      <select
+                        aria-label={`Role ${user.name || user.nik}`}
+                        value={user.role}
+                        disabled={busyUid === user.id}
+                        onChange={(event) => updateAccount(user, 'role', event.target.value)}
+                      >
+                        <option value="USER">USER</option>
+                        <option value="APP_ADMIN">APP_ADMIN</option>
+                      </select>
+                    )}
                   </td>
                   <td>
                     <span className={`statusPill status-${user.status || 'ACTIVE'}`}>{user.status || 'ACTIVE'}</span>
                   </td>
                   <td>{formatLastLogin(user.lastLoginAt)}</td>
                   <td>
-                    <button
-                      type="button"
-                      className="tableActionButton"
-                      disabled
-                      onClick={() => setNotice('Fitur pengelolaan akun akan diaktifkan pada tahap berikutnya.')}
-                    >
-                      {user.status === 'ACTIVE' ? 'Nonaktifkan' : 'Aktifkan'}
-                    </button>
+                    {canManageAccountAction({
+                      actorRole: role,
+                      targetRole: user.role,
+                      action: 'status',
+                      value: user.status === 'ACTIVE' ? 'DISABLED' : 'ACTIVE',
+                    }) ? (
+                      <button
+                        type="button"
+                        className="tableActionButton"
+                        disabled={busyUid === user.id}
+                        onClick={() => updateAccount(
+                          user,
+                          'status',
+                          user.status === 'ACTIVE' ? 'DISABLED' : 'ACTIVE'
+                        )}
+                      >
+                        {user.status === 'ACTIVE' ? 'Nonaktifkan' : 'Aktifkan'}
+                      </button>
+                    ) : (
+                      <span>Dilindungi</span>
+                    )}
                   </td>
                 </tr>
               ))}

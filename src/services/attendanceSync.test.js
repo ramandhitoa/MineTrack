@@ -3,9 +3,11 @@ import assert from 'node:assert/strict';
 
 import {
   attendanceKey,
+  createProductionRecordId,
   getUnsyncedAttendanceItems,
   mergeAttendanceItems,
   normalizeAttendancePayload_,
+  withProductionRecordIds,
 } from './googleSheetsService.js';
 
 test('attendanceKey menggunakan tanggal dan nama sebagai kunci unik', () => {
@@ -56,4 +58,22 @@ test('normalizeAttendancePayload_ menjaga field Penanggung Jawab dan Pembahasan'
     payload[0].pembahasan,
     'Pesan-pesan keselamatan dan update isu teknis & non teknis'
   );
+});
+
+test('Production record ID tetap sama saat payload dipersiapkan ulang untuk retry', () => {
+  const recordId = createProductionRecordId();
+  const firstAttempt = withProductionRecordIds([{ recordId, date: '2026-09-28' }]);
+  const retryAttempt = withProductionRecordIds(firstAttempt);
+
+  assert.match(recordId, /^production-/);
+  assert.equal(retryAttempt[0].recordId, recordId);
+});
+
+test('Production outbox fallback memakai ID record yang sama setiap kali', () => {
+  const item = { date: '2026-09-28' };
+  const firstAttempt = withProductionRecordIds([item], 'offline-queue-id');
+  const retryAttempt = withProductionRecordIds([item], 'offline-queue-id');
+
+  assert.equal(firstAttempt[0].recordId, 'offline-queue-id-0');
+  assert.equal(retryAttempt[0].recordId, firstAttempt[0].recordId);
 });

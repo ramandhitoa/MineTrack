@@ -1920,6 +1920,13 @@ function saveProduction_(
   payload
 ) {
 
+  var lock =
+    LockService.getScriptLock();
+
+  lock.waitLock(30000);
+
+  try {
+
   var sheet =
     getSheet_();
 
@@ -1957,70 +1964,47 @@ function saveProduction_(
   }
 
 
-  var rows =
-    items.map(
-      function(item) {
+  var properties =
+    PropertiesService.getScriptProperties();
 
-        if (
-          Array.isArray(item)
-        ) {
+  var processed =
+    properties.getProperties();
 
-          var row =
-            item.slice(
-              0,
-              HEADERS.length - 1
-            );
+  var rows = [];
+  var keysToMark = {};
+  var seenKeys = {};
+  var duplicateCount = 0;
 
+  items.forEach(function(item) {
+    var recordId = item && !Array.isArray(item)
+      ? String(item.recordId || item.id || '').trim()
+      : '';
 
-          while (
-            row.length <
-            HEADERS.length - 1
-          ) {
+    if (!recordId) {
+      throw new Error(
+        'Setiap data Production harus memiliki recordId yang stabil.'
+      );
+    }
 
-            row.push('');
+    var key = productionIdempotencyKey_(recordId);
 
-          }
+    if (processed[key] || seenKeys[key]) {
+      duplicateCount++;
+      return;
+    }
 
+    seenKeys[key] = true;
+    keysToMark[key] = '1';
+    rows.push(itemToRow_(item, submittedAt));
+  });
 
-          row.push(
-            item.length >=
-              HEADERS.length
-              ? item[
-                  HEADERS.length - 1
-                ] ||
-                submittedAt
-              : submittedAt
-          );
-
-
-          return row;
-
-        }
-
-
-        return itemToRow_(
-          item,
-          submittedAt
-        );
-
-      }
-    );
-
-
-  var startRow =
-    sheet.getLastRow() + 1;
-
-
-  sheet
-    .getRange(
-      startRow,
-      1,
-      rows.length,
-      HEADERS.length
-    )
-    .setValues(
-      rows
-    );
+  if (rows.length) {
+    var startRow = sheet.getLastRow() + 1;
+    sheet
+      .getRange(startRow, 1, rows.length, HEADERS.length)
+      .setValues(rows);
+    properties.setProperties(keysToMark);
+  }
 
 
   return respond_(
@@ -2031,11 +2015,28 @@ function saveProduction_(
       sheet:
         SHEET_NAME,
       count:
-        items.length
+        rows.length,
+      duplicateCount:
+        duplicateCount
     },
     ''
   );
 
+  } finally {
+    lock.releaseLock();
+  }
+
+}
+
+
+function productionIdempotencyKey_(recordId) {
+  var digest = Utilities.computeDigest(
+    Utilities.DigestAlgorithm.SHA_256,
+    recordId
+  );
+
+  return 'production_record_' +
+    Utilities.base64EncodeWebSafe(digest).replace(/=+$/, '');
 }
 
 

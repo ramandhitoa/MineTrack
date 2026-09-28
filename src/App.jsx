@@ -42,6 +42,7 @@ import { calculateShiftHours, toWitaDateInput } from './utils/formatters';
 import { copyLogsAsTSV, exportLogsAsCSV } from './services/exportService';
 import {
   attendanceKey,
+  createProductionRecordId,
   DEFAULT_GOOGLE_APPS_SCRIPT_URL,
   getUnsyncedAttendanceItems,
   GOOGLE_APPS_SCRIPT,
@@ -286,7 +287,10 @@ export default function App() {
     try {
       const result = await loginWithNikAndPassword({ nik, password });
       setAuthSession(result.session);
-      notify(`Selamat datang ${result.user.name || result.user.nik}.`);
+      const displayName = result.user.name === 'MineTrack User'
+        ? 'GC PIT REPORT User'
+        : result.user.name || result.user.nik;
+      notify(`Selamat datang ${displayName}.`);
     } catch (error) {
       console.error('[AUTH LOGIN ORIGINAL ERROR]', {
         name: error?.name,
@@ -506,6 +510,7 @@ export default function App() {
     const newLog = {
       ...dailyForm,
       id: Date.now(),
+      recordId: createProductionRecordId(),
       status: dailyForm.status || 'Open',
       block: dailyForm.block || '',
       ritPrevious,
@@ -694,30 +699,39 @@ const syncGoogleSheets = async () => {
   setGsStatus('Memeriksa data Google Sheets...');
 
   try {
-    // Baca Google Sheets terlebih dahulu
-    const remoteLogs = await readLogsFromGoogleSheets(gsUrl);
+    const productionQueue = (await getPendingData()).filter((item) => {
+      const type = String(item.type || '').toLowerCase();
+      return type === 'production' || type === 'produksi';
+    });
 
-    if (remoteLogs.length > logs.length) {
-      // Google Sheets lebih lengkap
-      setLogs(remoteLogs);
-      setGsRemoteCount(remoteLogs.length);
-      setGsStatus(`Terhubung • ${remoteLogs.length} baris`);
+    const itemsToSync = productionQueue.flatMap((item) => {
+      const payloadItems = Array.isArray(item.payload)
+        ? item.payload
+        : [item.payload];
 
-      notify(
-        `Data Google Sheets dipakai sebagai sumber utama: ${remoteLogs.length} baris.`
-      );
-    } else {
-      // Browser memiliki data sama/lebih baru
-      const verifiedLogs = await syncLogsToGoogleSheets(gsUrl, logs);
+      return payloadItems.map((payload, index) => ({
+        ...payload,
+        recordId: payload?.recordId || payload?.id || `${item.id}-${index}`,
+      }));
+    });
 
-      setLogs(verifiedLogs);
-      setGsRemoteCount(verifiedLogs.length);
-      setGsStatus(`Terhubung • ${verifiedLogs.length} baris`);
+    if (itemsToSync.length) {
+      await syncLogsToGoogleSheets(gsUrl, itemsToSync);
 
-      notify(
-        `Sinkronisasi berhasil: ${verifiedLogs.length} baris.`
-      );
+      for (const item of productionQueue) {
+        await deletePendingData(item.id);
+      }
     }
+
+    const remoteLogs = await readLogsFromGoogleSheets(gsUrl);
+    if (remoteLogs.length > 0) setLogs(remoteLogs);
+    setGsRemoteCount(remoteLogs.length);
+    setGsStatus(`Terhubung • ${remoteLogs.length} baris`);
+    notify(
+      itemsToSync.length
+        ? `Sinkronisasi Production berhasil: ${itemsToSync.length} record.`
+        : 'Tidak ada data Production pending untuk disinkronkan.'
+    );
   } catch (error) {
     setGsStatus(`Gagal • ${error.message}`);
 
@@ -792,6 +806,18 @@ const syncGoogleSheets = async () => {
     }
   };
 
+  useEffect(() => {
+    const role = authSession?.user?.role || 'USER';
+    const ownerOnlyTabs = ['owner-users', 'owner-master', 'owner-settings'];
+    const adminTabs = ['admin-users', 'admin-master', 'admin-settings'];
+
+    if (role === 'USER' && [...ownerOnlyTabs, ...adminTabs].includes(activeTab)) {
+      setActiveTab('dashboard');
+    } else if (role === 'APP_ADMIN' && ownerOnlyTabs.includes(activeTab)) {
+      setActiveTab('dashboard');
+    }
+  }, [authSession?.user?.role, activeTab]);
+
   if (!authSession) {
     return (
       <LoginScreen
@@ -810,6 +836,7 @@ const syncGoogleSheets = async () => {
     'owner-settings': 'Pengaturan',
     'admin-users': 'Manajemen User',
     'admin-master': 'Master User',
+    'admin-settings': 'Pengaturan',
   };
 
   return (
@@ -820,7 +847,7 @@ const syncGoogleSheets = async () => {
         mobileNav={mobileNav}
         setMobileNav={setMobileNav}
         pendingCount={pending.filter((job) => job.status !== 'Selesai').length}
-        title={pageTitles[activeTab] || 'MineTrack'}
+        title={pageTitles[activeTab] || 'GC PIT REPORT'}
         alert={alert}
         setAlert={setAlert}
         theme={theme}
@@ -899,16 +926,27 @@ const syncGoogleSheets = async () => {
           />
         )}
 
-        {activeTab === 'owner-master' && <MasterAkunPage role="OWNER" />}
-        {activeTab === 'owner-users' && <ManagementUserPage role="OWNER" />}
-        {activeTab === 'owner-settings' && (
+        {activeTab === 'owner-master' && <MasterAkunPage role={currentRole} />}
+        {activeTab === 'owner-users' && <ManagementUserPage role={currentRole} />}
+        {activeTab === 'owner-settings' && currentRole === 'OWNER' && (
           <div className="adminPlaceholder">
             <h3>Pengaturan</h3>
-            <p>Pengaturan aplikasi umum tetap mengikuti konfigurasi MineTrack yang sudah ada.</p>
+            <p>Pengaturan aplikasi umum tetap mengikuti konfigurasi GC PIT REPORT yang sudah ada.</p>
+            <button type="button" className="primaryButton" onClick={() => setActiveTab('owner-users')}>
+              Management User
+            </button>
           </div>
         )}
-        {activeTab === 'admin-master' && <MasterAkunPage role="APP_ADMIN" />}
-        {activeTab === 'admin-users' && <ManagementUserPage role="APP_ADMIN" />}
+        {activeTab === 'admin-master' && <MasterAkunPage role={currentRole} />}
+        {activeTab === 'admin-users' && <ManagementUserPage role={currentRole} />}
+        {activeTab === 'admin-settings' && currentRole === 'APP_ADMIN' && (
+          <div className="adminPlaceholder">
+            <h3>Pengaturan</h3>
+            <button type="button" className="primaryButton" onClick={() => setActiveTab('admin-users')}>
+              Management User
+            </button>
+          </div>
+        )}
       </Layout>
 
       {dailyOpen && (

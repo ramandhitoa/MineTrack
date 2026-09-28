@@ -451,28 +451,69 @@ function normalizeAttendanceDate_(value) {
 }
 
 function saveProduction_(payload) {
-  const sheet = getSheet_();
-  const items = Array.isArray(payload.items) ? payload.items : Array.isArray(payload.values) ? payload.values : [];
-  const submittedAt = getSubmissionTimestamp_();
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
 
-  if (!items.length) {
-    return respond_({ success: true, message: 'Tidak ada data produksi baru.', sheet: SHEET_NAME, count: 0 }, '');
-  }
+  try {
+    const sheet = getSheet_();
+    const items = Array.isArray(payload.items) ? payload.items : Array.isArray(payload.values) ? payload.values : [];
+    const submittedAt = getSubmissionTimestamp_();
 
-  const rows = items.map(function(item) {
-    if (Array.isArray(item)) {
-      const row = item.slice(0, HEADERS.length - 1);
-      while (row.length < HEADERS.length - 1) row.push('');
-      row.push(item.length >= HEADERS.length ? item[HEADERS.length - 1] || submittedAt : submittedAt);
-      return row;
+    if (!items.length) {
+      return respond_({ success: true, message: 'Tidak ada data produksi baru.', sheet: SHEET_NAME, count: 0 }, '');
     }
-    return itemToRow_(item, submittedAt);
-  });
 
-  const startRow = sheet.getLastRow() + 1;
-  sheet.getRange(startRow, 1, rows.length, HEADERS.length).setValues(rows);
+    const properties = PropertiesService.getScriptProperties();
+    const processed = properties.getProperties();
+    const rows = [];
+    const keysToMark = {};
+    const seenKeys = {};
+    let duplicateCount = 0;
 
-  return respond_({ success: true, message: 'Data MineTrack berhasil disimpan.', sheet: SHEET_NAME, count: items.length }, '');
+    items.forEach(function(item) {
+      const recordId = item && !Array.isArray(item)
+        ? String(item.recordId || item.id || '').trim()
+        : '';
+
+      if (!recordId) {
+        throw new Error('Setiap data Production harus memiliki recordId yang stabil.');
+      }
+
+      const key = productionIdempotencyKey_(recordId);
+      if (processed[key] || seenKeys[key]) {
+        duplicateCount++;
+        return;
+      }
+
+      seenKeys[key] = true;
+      keysToMark[key] = '1';
+      rows.push(itemToRow_(item, submittedAt));
+    });
+
+    if (rows.length) {
+      const startRow = sheet.getLastRow() + 1;
+      sheet.getRange(startRow, 1, rows.length, HEADERS.length).setValues(rows);
+      properties.setProperties(keysToMark);
+    }
+
+    return respond_({
+      success: true,
+      message: rows.length ? 'Data MineTrack berhasil disimpan.' : 'Semua record Production sudah pernah diproses.',
+      sheet: SHEET_NAME,
+      count: rows.length,
+      duplicateCount: duplicateCount
+    }, '');
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function productionIdempotencyKey_(recordId) {
+  const digest = Utilities.computeDigest(
+    Utilities.DigestAlgorithm.SHA_256,
+    recordId
+  );
+  return 'production_record_' + Utilities.base64EncodeWebSafe(digest).replace(/=+$/, '');
 }
 
 function saveOreGetting_(payload) {
@@ -731,12 +772,44 @@ function respond_(data, callback) {
 // ------------------------------------------------------------
 // POST DATA KE APPS SCRIPT
 // ------------------------------------------------------------
+export function createProductionRecordId() {
+  if (!globalThis.crypto?.randomUUID) {
+    throw new Error('Browser tidak mendukung pembuatan ID Production yang aman.');
+  }
+
+  return `production-${globalThis.crypto.randomUUID()}`;
+}
+
+export function withProductionRecordIds(logs, fallbackPrefix = '') {
+  if (!Array.isArray(logs)) {
+    throw new Error('Data Production harus berupa daftar record.');
+  }
+
+  return logs.map((item, index) => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) {
+      throw new Error('Setiap record Production harus berupa object.');
+    }
+
+    const recordId = String(
+      item.recordId || item.id || (fallbackPrefix ? `${fallbackPrefix}-${index}` : '')
+    ).trim();
+
+    if (!recordId) {
+      throw new Error('Record Production tidak memiliki ID stabil.');
+    }
+
+    return { ...item, recordId };
+  });
+}
+
 export async function syncLogsToGoogleSheets(url, logs) {
   const endpoint = normalizeUrl_(url);
 
   if (!endpoint) {
     throw new Error('URL Google Apps Script belum diisi.');
   }
+
+  const identifiedLogs = withProductionRecordIds(logs);
 
   try {
     const response = await fetch(endpoint, {
@@ -746,8 +819,8 @@ export async function syncLogsToGoogleSheets(url, logs) {
   },
   body: JSON.stringify({
     type: 'production',
-    items: logs,
-    values: logs,
+    items: identifiedLogs,
+    values: identifiedLogs,
   }),
 });
 
@@ -762,7 +835,7 @@ export async function syncLogsToGoogleSheets(url, logs) {
       throw new Error(payload.message || 'Sinkronisasi ke Google Sheets gagal.');
     }
 
-    return logs;
+    return identifiedLogs;
   } catch (error) {
     const message = String(error?.message || '');
     if (message.includes('Failed to fetch') || message.includes('NetworkError')) {

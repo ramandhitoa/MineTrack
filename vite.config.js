@@ -9,8 +9,8 @@ export default defineConfig({
 			registerType: 'autoUpdate',
 			includeAssets: ['android-chrome-192x192.png', 'android-chrome-512x512.png'],
 			manifest: {
-				name: 'Grade Control AKP',
-				short_name: 'Grade Control AKP',
+				name: 'GC PIT REPORT',
+				short_name: 'GC PIT REPORT',
 				description: 'Dashboard produksi dan absensi',
 				theme_color: '#0b132b',
 				background_color: '#0b132b',
