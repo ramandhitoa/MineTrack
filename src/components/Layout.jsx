@@ -21,8 +21,17 @@ import {
   UserCheck,
   X,
 } from 'lucide-react';
-import { useState } from 'react';
+import { getFirestore } from 'firebase/firestore';
+import { useEffect, useReducer, useState } from 'react';
 import { tabs } from '../constants';
+import { firebaseApp } from '../firebase/client';
+import {
+  canEditCutOffGradeNi,
+  createCutOffGradeNiState,
+  cutOffGradeNiReducer,
+  cutOffGradeNiStore,
+  normalizeCutOffGradeNi,
+} from '../services/cutOffGradeNiService';
 
 function getRoleNavigation(role) {
   const baseNavigation = tabs.map(([id, label]) => [id, label]);
@@ -79,6 +88,7 @@ export default function Layout({
         setMobileNav={setMobileNav}
         pendingCount={pendingCount}
         role={currentRole}
+        user={user}
       />
 
       <main>
@@ -113,54 +123,70 @@ export default function Layout({
   );
 }
 
-function Sidebar({ activeTab, setActiveTab, mobileNav, setMobileNav, pendingCount, role }) {
+function Sidebar({ activeTab, setActiveTab, mobileNav, setMobileNav, pendingCount, role, user }) {
   const navigation = getRoleNavigation(role);
-  const canEditCutoff = role === 'OWNER' || role === 'APP_ADMIN';
-  const [cutoff, setCutoff] = useState({
-    saprolitHg: 1.60,
-    saprolitLgMin: 1.30,
-    saprolitLgMax: 1.59,
-    limoniteMin: 1.00,
-    limoniteMax: 1.29,
-    waste: 1.00,
-  });
+  const canEditCutoff = canEditCutOffGradeNi(role);
+  const [cutoff, dispatchCutoff] = useReducer(cutOffGradeNiReducer, undefined, createCutOffGradeNiState);
+  const [cutoffLoading, setCutoffLoading] = useState(true);
+  const [cutoffLoadError, setCutoffLoadError] = useState('');
+  const canEditLoadedCutoff = canEditCutoff && Boolean(user?.uid) && !cutoffLoading && !cutoffLoadError;
 
-  const updateCutoff = (key, value) => setCutoff((current) => ({ ...current, [key]: Number(value) || 0 }));
+  useEffect(() => {
+    let active = true;
+    setCutoffLoading(true);
+    setCutoffLoadError('');
 
-  const renderCutoffValue = (label, value, isRange = false, secondValue = null, isWaste = false) => {
-    if (canEditCutoff) {
-      if (isRange) {
-        return (
-          <span className="cutoffValue">
-            <input type="number" step="0.01" min="0" value={value} onChange={(event) => updateCutoff(label, event.target.value)} /> - <input type="number" step="0.01" min="0" value={secondValue} onChange={(event) => updateCutoff(label === 'saprolitLgMin' ? 'saprolitLgMax' : 'limoniteMax', event.target.value)} />% Ni
-          </span>
-        );
-      }
+    cutOffGradeNiStore.load(getFirestore(firebaseApp))
+      .then((savedCutoff) => {
+        if (active) dispatchCutoff({ type: 'loaded', value: savedCutoff });
+      })
+      .catch(() => {
+        if (active) setCutoffLoadError('Cut-Off Grade Ni gagal dimuat. Muat ulang halaman untuk mencoba kembali.');
+      })
+      .finally(() => {
+        if (active) setCutoffLoading(false);
+      });
 
-      if (isWaste) {
-        return (
-          <span className="cutoffValue">&lt; <input type="number" step="0.01" min="0" value={value} onChange={(event) => updateCutoff('waste', event.target.value)} />% Ni</span>
-        );
-      }
+    return () => {
+      active = false;
+    };
+  }, [user?.uid]);
 
-      return (
-        <span className="cutoffValue">≥ <input type="number" step="0.01" min="0" value={value} onChange={(event) => updateCutoff('saprolitHg', event.target.value)} />% Ni</span>
+  const cutoffInput = (field, label) => (
+    <input
+      aria-label={label}
+      type="number"
+      step="0.01"
+      min="0"
+      value={cutoff.draft[field]}
+      disabled={!cutoff.editing || !canEditLoadedCutoff || cutoff.saving}
+      onChange={(event) => dispatchCutoff({ type: 'change', field, value: event.target.value })}
+    />
+  );
+
+  const saveCutoff = async () => {
+    let values;
+    try {
+      values = normalizeCutOffGradeNi(cutoff.draft);
+    } catch (error) {
+      dispatchCutoff({ type: 'save-error', message: error.message });
+      return;
+    }
+
+    dispatchCutoff({ type: 'save-start' });
+    try {
+      const savedCutoff = await cutOffGradeNiStore.save(
+        getFirestore(firebaseApp),
+        values,
+        user.uid
       );
+      dispatchCutoff({ type: 'save-success', value: savedCutoff });
+    } catch {
+      dispatchCutoff({
+        type: 'save-error',
+        message: 'Cut-Off Grade Ni gagal disimpan. Periksa koneksi lalu coba lagi.',
+      });
     }
-
-    if (isRange) {
-      return (
-        <span className="cutoffValue">
-          {Number(value).toFixed(2)} - {Number(secondValue).toFixed(2)}% Ni
-        </span>
-      );
-    }
-
-    if (isWaste) {
-      return <span className="cutoffValue">&lt; {Number(value).toFixed(2)}% Ni</span>;
-    }
-
-    return <span className="cutoffValue">≥ {Number(value).toFixed(2)}% Ni</span>;
   };
 
   return (
@@ -249,21 +275,47 @@ function Sidebar({ activeTab, setActiveTab, mobileNav, setMobileNav, pendingCoun
           <div className="cutoffList">
             <label className="cutoffRow">
               <span>Saprolit HG:</span>
-              {renderCutoffValue('saprolitHg', cutoff.saprolitHg)}
+              <span className="cutoffValue">≥ {cutoffInput('saprolitHGMin', 'Saprolit HG minimum')}% Ni</span>
             </label>
             <label className="cutoffRow">
               <span>Saprolit LG:</span>
-              {renderCutoffValue('saprolitLgMin', cutoff.saprolitLgMin, true, cutoff.saprolitLgMax)}
+              <span className="cutoffValue">
+                {cutoffInput('saprolitLGMin', 'Saprolit LG minimum')} - {cutoffInput('saprolitLGMax', 'Saprolit LG maksimum')}% Ni
+              </span>
             </label>
             <label className="cutoffRow">
               <span>Limonit Ore:</span>
-              {renderCutoffValue('limoniteMin', cutoff.limoniteMin, true, cutoff.limoniteMax)}
+              <span className="cutoffValue">
+                {cutoffInput('limonitOreMin', 'Limonit Ore minimum')} - {cutoffInput('limonitOreMax', 'Limonit Ore maksimum')}% Ni
+              </span>
             </label>
             <label className="cutoffRow">
               <span>Waste / OB:</span>
-              {renderCutoffValue('waste', cutoff.waste, false, null, true)}
+              <span className="cutoffValue">&lt; {cutoffInput('wasteOBMax', 'Waste / OB maksimum')}% Ni</span>
             </label>
           </div>
+          {cutoffLoading && <div className="cutoffFeedback" role="status">Memuat Cut-Off Grade Ni...</div>}
+          {cutoffLoadError && <div className="cutoffFeedback error" role="alert">{cutoffLoadError}</div>}
+          {cutoff.error && <div className="cutoffFeedback error" role="alert">{cutoff.error}</div>}
+          {cutoff.notice && <div className="cutoffFeedback success" role="status">{cutoff.notice}</div>}
+          {canEditCutoff && (
+            <div className="cutoffActions">
+              {cutoff.editing ? (
+                <>
+                  <button type="button" disabled={!canEditLoadedCutoff || cutoff.saving} onClick={saveCutoff}>
+                    {cutoff.saving ? 'MENYIMPAN...' : 'SIMPAN'}
+                  </button>
+                  <button type="button" disabled={cutoff.saving} onClick={() => dispatchCutoff({ type: 'cancel' })}>
+                    BATAL
+                  </button>
+                </>
+              ) : (
+                <button type="button" disabled={!canEditLoadedCutoff} onClick={() => dispatchCutoff({ type: 'edit' })}>
+                  EDIT
+                </button>
+              )}
+            </div>
+          )}
         </div>
       </div>
 

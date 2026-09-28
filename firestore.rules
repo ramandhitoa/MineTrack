@@ -25,6 +25,47 @@ service cloud.firestore {
       return isActiveUser() && currentUserRole() == 'APP_ADMIN';
     }
 
+    function isNonNegativeCutOffGradeValue(value) {
+      return (value is int || value is float) && value >= 0;
+    }
+
+    function validCutOffGradeNi(data) {
+      return data.keys().hasAll([
+          'saprolitHGMin',
+          'saprolitLGMin',
+          'saprolitLGMax',
+          'limonitOreMin',
+          'limonitOreMax',
+          'wasteOBMax',
+          'updatedAt',
+          'updatedBy'
+        ])
+        && data.keys().hasOnly([
+          'saprolitHGMin',
+          'saprolitLGMin',
+          'saprolitLGMax',
+          'limonitOreMin',
+          'limonitOreMax',
+          'wasteOBMax',
+          'updatedAt',
+          'updatedBy'
+        ])
+        && isNonNegativeCutOffGradeValue(data.saprolitHGMin)
+        && isNonNegativeCutOffGradeValue(data.saprolitLGMin)
+        && isNonNegativeCutOffGradeValue(data.saprolitLGMax)
+        && isNonNegativeCutOffGradeValue(data.limonitOreMin)
+        && isNonNegativeCutOffGradeValue(data.limonitOreMax)
+        && isNonNegativeCutOffGradeValue(data.wasteOBMax)
+        && data.wasteOBMax <= data.limonitOreMin
+        && data.limonitOreMin <= data.limonitOreMax
+        && data.limonitOreMax < data.saprolitLGMin
+        && data.saprolitLGMin <= data.saprolitLGMax
+        && data.saprolitLGMax < data.saprolitHGMin
+        && data.updatedAt is timestamp
+        && data.updatedAt == request.time
+        && data.updatedBy == request.auth.uid;
+    }
+
     function validAccountStatus(status) {
       return status in ['ACTIVE', 'DISABLED'];
     }
@@ -63,6 +104,14 @@ service cloud.firestore {
       allow update: if ownerCanUpdateManagedAccount()
         || appAdminCanUpdateUserStatus();
       allow delete: if false;
+    }
+
+    match /appSettings/cutOffGradeNi {
+      allow get: if isActiveUser()
+        && currentUserRole() in ['OWNER', 'APP_ADMIN', 'USER'];
+      allow create, update: if (isOwner() || isAppAdmin())
+        && validCutOffGradeNi(request.resource.data);
+      allow list, delete: if false;
     }
 
     match /{document=**} {
