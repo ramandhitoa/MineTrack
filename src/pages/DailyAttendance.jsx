@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
-import { Camera, CloudUpload, X } from 'lucide-react';
+import { Camera, CloudUpload, ImagePlus, X } from 'lucide-react';
 import { attendanceLocations, attendanceNames, emptyAttendance } from '../data/initialData';
 import { dateFmt, fmt } from '../utils/formatters';
 import { normalizeAttendanceName } from '../services/googleSheetsService';
+import { compressGalleryPhoto } from '../services/photoCompression';
 
 const MAX_PHOTO_BYTES = 100 * 1024;
 
@@ -102,6 +103,7 @@ export default function DailyAttendance({
 
   const videoRef = useRef(null);
   const streamRef = useRef(null);
+  const photoInputRef = useRef(null);
 
   useEffect(() => {
     return () => {
@@ -215,6 +217,25 @@ export default function DailyAttendance({
         error?.message ||
           'Foto gagal diproses. Silakan coba lagi.'
       );
+    } finally {
+      setPhotoProcessing(false);
+    }
+  };
+
+  const selectGalleryPhoto = async (event) => {
+    const file = event.currentTarget.files?.[0];
+    event.currentTarget.value = '';
+
+    if (!file) return;
+
+    setPhotoProcessing(true);
+
+    try {
+      const compressedDataUrl = await compressGalleryPhoto(file);
+      setPhotoPreview(compressedDataUrl);
+      update('photoDataUrl', compressedDataUrl);
+    } catch (error) {
+      alert(error?.message || 'Foto tidak dapat diproses. Silakan pilih foto lain.');
     } finally {
       setPhotoProcessing(false);
     }
@@ -475,21 +496,43 @@ export default function DailyAttendance({
             <div>
               <strong>Foto Absensi</strong>
               <small>
-                Foto dikompres otomatis maksimal 100 KB.
+                Foto galeri dikompres otomatis maksimal 100 KB.
               </small>
             </div>
 
-            {!photoPreview ? (
+            <div className="attendancePhotoActions">
               <button
                 type="button"
                 className="primary"
                 onClick={openCamera}
-                disabled={cameraLoading || photoProcessing}
+                disabled={cameraLoading || photoProcessing || cameraOpen}
               >
                 <Camera size={16} />
                 {cameraLoading ? 'Membuka Kamera...' : 'Ambil Foto'}
               </button>
-            ) : (
+
+              <button
+                type="button"
+                className="attendancePhotoFileButton"
+                onClick={() => photoInputRef.current?.click()}
+                disabled={photoProcessing || cameraOpen}
+              >
+                <ImagePlus size={16} />
+                {photoProcessing ? 'Memproses Foto...' : 'Tambahkan File'}
+              </button>
+
+              <input
+                ref={photoInputRef}
+                className="attendancePhotoFileInput"
+                type="file"
+                accept="image/*"
+                onChange={selectGalleryPhoto}
+                disabled={photoProcessing || cameraOpen}
+                aria-label="Pilih foto dari galeri atau penyimpanan perangkat"
+              />
+            </div>
+
+            {photoPreview && (
               <div className="attendancePhotoPreview">
                 <img
                   src={photoPreview}

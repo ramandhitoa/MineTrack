@@ -1279,6 +1279,75 @@ header {
   min-height:34px;
   white-space:nowrap;
 }
+.attendancePhotoBox {
+  grid-column:1 / -1;
+  display:grid;
+  gap:8px;
+  min-width:0;
+}
+.attendancePhotoBox>div:first-child {
+  display:flex;
+  flex-direction:column;
+  gap:3px;
+  color:var(--text);
+  font-size:11px;
+}
+.attendancePhotoBox small {
+  color:var(--text-subtle);
+  font-size:10px;
+  font-weight:500;
+}
+.attendancePhotoActions {
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+}
+.attendanceForm .attendancePhotoActions button {
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:6px;
+  width:auto;
+  min-height:38px;
+  padding:8px 12px;
+}
+.attendancePhotoFileButton,
+.attendancePhotoPreview button {
+  border:1px solid var(--button-border);
+  border-radius:8px;
+  background:var(--button-bg);
+  color:var(--button-text);
+}
+.attendancePhotoFileButton:hover,
+.attendancePhotoPreview button:hover {
+  border-color:var(--primary);
+}
+.attendancePhotoFileInput {
+  display:none;
+}
+.attendancePhotoPreview {
+  display:flex;
+  align-items:center;
+  flex-wrap:wrap;
+  gap:10px;
+}
+.attendancePhotoPreview img {
+  display:block;
+  width:88px;
+  aspect-ratio:4 / 3;
+  object-fit:cover;
+  border:1px solid var(--border);
+  border-radius:8px;
+  background:var(--bg-soft);
+}
+.attendancePhotoPreview button {
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:6px;
+  min-height:34px;
+  padding:7px 10px;
+}
 .cameraModal {
   position:fixed;
   inset:0;
