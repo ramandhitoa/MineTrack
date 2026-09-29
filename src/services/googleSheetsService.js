@@ -38,9 +38,13 @@ export function normalizeAttendanceValue(value = '') {
   return String(value ?? '').trim().replace(/\s+/g, ' ');
 }
 
+export function normalizeAttendanceName(name = '') {
+  return normalizeAttendanceValue(name).toUpperCase();
+}
+
 export function attendanceKey(item = {}) {
   const date = normalizeAttendanceValue(item.date || item.tanggal || '').toLowerCase();
-  const name = normalizeAttendanceValue(item.name || item.nama || '').toLowerCase();
+  const name = normalizeAttendanceName(item.name || item.nama || '').toLowerCase();
 
   if (!date || !name) {
     return '';
@@ -332,7 +336,7 @@ function saveAttendance_(payload) {
       const date = row[0];
       const shift = row[1];
       const location = row[2];
-      const name = row[3];
+      const name = String(row[3] || '').trim().replace(/\\s+/g, ' ').toUpperCase();
       const penanggungJawab = String(row[4] || '').trim();
       const pembahasan = String(row[5] || '').trim();
 
@@ -903,11 +907,7 @@ export function normalizeAttendancePayload_(attendance = []) {
         .trim()
         .replace(/\s+/g, ' '),
 
-      name: String(
-        item.name || item.nama || ''
-      )
-        .trim()
-        .replace(/\s+/g, ' '),
+      name: normalizeAttendanceName(item.name || item.nama || ''),
 
       penanggungJawab: String(
         item.penanggungJawab ||

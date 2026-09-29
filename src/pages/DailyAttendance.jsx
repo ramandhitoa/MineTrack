@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Camera, CloudUpload, X } from 'lucide-react';
 import { attendanceLocations, attendanceNames, emptyAttendance } from '../data/initialData';
 import { dateFmt, fmt } from '../utils/formatters';
+import { normalizeAttendanceName } from '../services/googleSheetsService';
 
 const MAX_PHOTO_BYTES = 100 * 1024;
 
@@ -117,13 +118,15 @@ export default function DailyAttendance({
   };
 
   const toggleName = (name) => {
+    const selectedName = normalizeAttendanceName(name);
+
     setForm((current) => {
       const currentNames = Array.isArray(current.selectedNames)
-        ? current.selectedNames
+        ? current.selectedNames.map(normalizeAttendanceName)
         : [];
-      const nextNames = currentNames.includes(name)
-        ? currentNames.filter((item) => item !== name)
-        : [...currentNames, name];
+      const nextNames = currentNames.includes(selectedName)
+        ? currentNames.filter((item) => item !== selectedName)
+        : [...currentNames, selectedName];
 
       return {
         ...current,
@@ -243,7 +246,9 @@ export default function DailyAttendance({
   const buildWhatsAppMessage = (report) => {
     if (!report) return '';
 
-    const participants = (report.participants || []).filter(Boolean);
+    const participants = (report.participants || [])
+      .map(normalizeAttendanceName)
+      .filter(Boolean);
     const lines = [];
 
     const reportTitle = `P5M ${String(report.location || '').toUpperCase()}`;
@@ -312,7 +317,7 @@ export default function DailyAttendance({
     const selectedNames = (Array.isArray(form.selectedNames)
       ? form.selectedNames
       : [form.name].filter(Boolean)
-    ).filter(Boolean);
+    ).map(normalizeAttendanceName).filter(Boolean);
 
     try {
       await onSaveAttendance(event, {
@@ -322,7 +327,7 @@ export default function DailyAttendance({
       });
 
       const participantNames = selectedNames.filter(
-        (name) => name !== form.penanggungJawab
+        (name) => name !== normalizeAttendanceName(form.penanggungJawab)
       );
 
       setSavedReport({
@@ -417,8 +422,11 @@ export default function DailyAttendance({
           <label className="attendanceNameChecklistLabel">
             <span>Nama</span>
             <div className="attendanceNameChecklistBox">
-              {attendanceNames.map((name) => {
-                const checked = (form.selectedNames || []).includes(name);
+              {attendanceNames.map((sourceName) => {
+                const name = normalizeAttendanceName(sourceName);
+                const checked = (form.selectedNames || [])
+                  .map(normalizeAttendanceName)
+                  .includes(name);
 
                 return (
                   <label
@@ -640,7 +648,7 @@ export default function DailyAttendance({
                       <td>{dateFmt(item.date)}</td>
                       <td>{item.shift || '-'}</td>
                       <td>{item.location || '-'}</td>
-                      <td>{item.name || '-'}</td>
+                      <td>{normalizeAttendanceName(item.name) || '-'}</td>
                       <td>{item.penanggungJawab || '-'}</td>
                       <td style={{ maxWidth: '220px', whiteSpace: 'pre-wrap' }}>
                         {item.pembahasan || '-'}

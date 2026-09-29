@@ -49,6 +49,7 @@ import {
   GOOGLE_APPS_SCRIPT,
   GOOGLE_SPREADSHEET_ID,
   mergeAttendanceItems,
+  normalizeAttendanceName,
   readAttendanceFromGoogleSheets,
   readLogsFromGoogleSheets,
   syncAttendanceToGoogleSheets,
@@ -593,7 +594,7 @@ if (navigator.onLine && gsUrl) {
 
     const cleanedNames = [...new Set(
       selectedNames
-        .map((name) => String(name || '').trim())
+        .map(normalizeAttendanceName)
         .filter(Boolean)
     )];
 
@@ -632,7 +633,7 @@ if (navigator.onLine && gsUrl) {
     cleanedNames.forEach((name, index) => {
       const candidate = {
         ...basePayload,
-        name: String(name).trim(),
+        name,
         id: Date.now() + index,
       };
 

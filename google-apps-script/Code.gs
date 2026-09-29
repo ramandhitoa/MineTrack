@@ -97,7 +97,8 @@ const ATTENDANCE_HEADERS = [
   'Nama',
   'Penanggung Jawab',
   'Pembahasan',
-  'Timestamp Pengumpulan'
+  'Timestamp Pengumpulan',
+  'Foto'
 ];
 
 
@@ -604,7 +605,7 @@ function saveAttendance_(payload) {
           String(row[1] || '').trim().toLowerCase();
 
         var name =
-          String(row[3] || '').trim().toLowerCase().replace(/\s+/g, ' ');
+          String(row[3] || '').trim().replace(/\s+/g, ' ').toUpperCase();
 
 
         var key =
@@ -636,11 +637,14 @@ function saveAttendance_(payload) {
 
     var invalidCount = 0;
 
+    var photoCount = 0;
+
 
     items.forEach(
       function(item) {
 
         var row;
+        var photoDataUrl = '';
 
 
         // ----------------------------------------------------
@@ -651,6 +655,12 @@ function saveAttendance_(payload) {
           Array.isArray(item)
         ) {
 
+          photoDataUrl = item[7] || '';
+
+          if (!photoDataUrl && /^data:/i.test(String(item[6] || ''))) {
+            photoDataUrl = item[6];
+          }
+
           row = [
             item[0] || '',
             item[1] || '',
@@ -658,7 +668,8 @@ function saveAttendance_(payload) {
             item[3] || '',
             item[4] || '',
             item[5] || '',
-            item[6] || ''
+            '',
+            photoDataUrl
           ];
 
         }
@@ -669,6 +680,11 @@ function saveAttendance_(payload) {
         // ----------------------------------------------------
 
         else {
+
+          photoDataUrl =
+            item.photoDataUrl ||
+            item.photo ||
+            '';
 
           row = [
             item.date ||
@@ -697,7 +713,9 @@ function saveAttendance_(payload) {
               item.topik ||
               '',
 
-            ''
+            '',
+
+            photoDataUrl
           ];
 
         }
@@ -714,7 +732,7 @@ function saveAttendance_(payload) {
           String(row[1] || '').trim().toLowerCase();
 
         var name =
-          String(row[3] || '').trim().toLowerCase().replace(/\s+/g, ' ');
+          String(row[3] || '').trim().replace(/\s+/g, ' ').toUpperCase();
 
         var penanggungJawab =
           String(row[4] || '').trim().replace(/\s+/g, ' ');
@@ -786,6 +804,17 @@ function saveAttendance_(payload) {
         // ----------------------------------------------------
         // Timestamp selalu dibuat oleh server.
 
+        var photoUrl = '';
+
+        if (photoDataUrl) {
+          photoUrl = saveAttendancePhoto_(
+            photoDataUrl,
+            date,
+            name
+          );
+          photoCount++;
+        }
+
         incomingRows[key] = [
           normalizeAttendanceDate_(
             date
@@ -803,7 +832,9 @@ function saveAttendance_(payload) {
 
           pembahasan,
 
-          submittedAt
+          submittedAt,
+
+          photoUrl
         ];
 
       }
@@ -843,7 +874,9 @@ function saveAttendance_(payload) {
           duplicateCount:
             duplicateCount,
           invalidCount:
-            invalidCount
+            invalidCount,
+          photoCount:
+            photoCount
         },
         ''
       );
@@ -887,6 +920,8 @@ function saveAttendance_(payload) {
           duplicateCount,
         invalidCount:
           invalidCount,
+        photoCount:
+          photoCount,
         timestamp:
           submittedAt
       },
@@ -910,6 +945,40 @@ function saveAttendance_(payload) {
 //
 // LOKASI/PIT DIABAIKAN
 // ============================================================
+
+function saveAttendancePhoto_(photoDataUrl, date, name) {
+  var match = String(photoDataUrl || '').match(/^data:image\/jpeg;base64,([A-Za-z0-9+/]+={0,2})$/i);
+  if (!match) {
+    throw new Error('Foto Daily Absensi harus berformat JPEG base64.');
+  }
+
+  var bytes;
+  try {
+    bytes = Utilities.base64Decode(match[1]);
+  } catch (error) {
+    throw new Error('Data foto Daily Absensi tidak valid.');
+  }
+
+  if (!bytes || !bytes.length || bytes.length > 100 * 1024) {
+    throw new Error('Ukuran foto Daily Absensi harus maksimal 100 KB.');
+  }
+
+  if ((bytes[0] & 0xff) !== 0xff || (bytes[1] & 0xff) !== 0xd8 || (bytes[2] & 0xff) !== 0xff) {
+    throw new Error('Data foto Daily Absensi bukan file JPEG yang valid.');
+  }
+
+  var folders = DriveApp.getFoldersByName('MineTrack Attendance Photos');
+  var folder = folders.hasNext()
+    ? folders.next()
+    : DriveApp.createFolder('MineTrack Attendance Photos');
+  var safeDate = String(date || '').replace(/[^A-Za-z0-9_-]/g, '-');
+  var safeName = String(name || '').replace(/[^A-Za-z0-9_-]/g, '-');
+  var blob = Utilities.newBlob(bytes, 'image/jpeg', safeDate + '-' + safeName + '.jpg');
+  var file = folder.createFile(blob);
+
+  return file.getUrl();
+}
+
 
 function attendanceKey_(
   date,
@@ -1233,6 +1302,9 @@ function dedupeAttendanceRowsForDisplay_(
       var timestamp =
         row[6] || '';
 
+      var photoUrl =
+        row[7] || '';
+
 
       // ----------------------------------------------------
       // SUPPORT SHEET LAMA 5 KOLOM / 6 KOLOM
@@ -1305,6 +1377,10 @@ function dedupeAttendanceRowsForDisplay_(
 
           String(
             timestamp
+          ).trim(),
+
+          String(
+            photoUrl
           ).trim()
         ]
       );
@@ -2309,7 +2385,7 @@ function ensureAttendanceHeaders_(
         1,
         1,
         1,
-        5
+        ATTENDANCE_HEADERS.length
       )
       .setValues(
         [
@@ -2321,13 +2397,13 @@ function ensureAttendanceHeaders_(
   }
 
 
-  var firstFive =
+  var currentHeaders =
     sheet
       .getRange(
         1,
         1,
         1,
-        5
+        ATTENDANCE_HEADERS.length
       )
       .getValues()[0];
 
@@ -2347,7 +2423,7 @@ function ensureAttendanceHeaders_(
 
 
   var current =
-    firstFive.map(
+    currentHeaders.map(
       function(value) {
 
         return String(
@@ -2362,6 +2438,21 @@ function ensureAttendanceHeaders_(
 
   var needsHeader =
     false;
+
+  var hasExistingAttendanceHeaders =
+    current.slice(0, ATTENDANCE_HEADERS.length - 1).join('|') ===
+    expected.slice(0, ATTENDANCE_HEADERS.length - 1).join('|');
+
+  if (
+    sheet.getLastRow() > 1 &&
+    hasExistingAttendanceHeaders &&
+    current[ATTENDANCE_HEADERS.length - 1] !== expected[ATTENDANCE_HEADERS.length - 1]
+  ) {
+    sheet
+      .getRange(1, ATTENDANCE_HEADERS.length, 1, 1)
+      .setValues([[ATTENDANCE_HEADERS[ATTENDANCE_HEADERS.length - 1]]]);
+    return;
+  }
 
 
   for (
@@ -2394,7 +2485,7 @@ function ensureAttendanceHeaders_(
         1,
         1,
         1,
-        5
+        ATTENDANCE_HEADERS.length
       )
       .setValues(
         [
