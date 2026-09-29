@@ -56,6 +56,40 @@ test('cut-off validation normalizes numeric input and rejects missing, non-finit
   }), /tidak konsisten/);
 });
 
+test('Limonit Ore may be below or above Saprolit LG and persists after reload', async () => {
+  const records = new Map();
+  const store = createCutOffGradeNiStore({
+    createDocumentRef: (_database, collection, id) => `${collection}/${id}`,
+    readDocument: async (path) => ({
+      exists: () => records.has(path),
+      data: () => records.get(path),
+    }),
+    writeDocument: async (path, data) => records.set(path, data),
+    makeServerTimestamp: () => 'server timestamp',
+  });
+  const limonitRanges = [
+    { min: 0.8, max: 0.89 },
+    { min: 1.6, max: 2.0 },
+    { min: 2.0, max: 2.5 },
+  ];
+
+  for (const range of limonitRanges) {
+    const values = {
+      ...DEFAULT_CUT_OFF_GRADE_NI,
+      saprolitLGMin: 0.9,
+      saprolitLGMax: 1.59,
+      limonitOreMin: range.min,
+      limonitOreMax: range.max,
+    };
+
+    await store.save({}, values, 'owner-uid');
+    const reloaded = await store.load({});
+
+    assert.equal(reloaded.limonitOreMin, range.min);
+    assert.equal(reloaded.limonitOreMax, range.max);
+  }
+});
+
 test('loaded values persist across reload and are the source for a new edit draft', async () => {
   const records = new Map();
   const store = createCutOffGradeNiStore({
@@ -115,6 +149,8 @@ test('Firestore rules allow active users to read but only active OWNER and APP_A
   assert.ok(settingsRules);
   assert.match(settingsRules, /allow get: if isActiveUser\(\)[\s\S]*currentUserRole\(\) in \['OWNER', 'APP_ADMIN', 'USER'\]/);
   assert.match(settingsRules, /allow create, update: if \(isOwner\(\) \|\| isAppAdmin\(\)\)[\s\S]*validCutOffGradeNi\(request\.resource\.data\)/);
+  assert.doesNotMatch(firestoreRules, /data\.wasteOBMax <= data\.limonitOreMin/);
+  assert.doesNotMatch(firestoreRules, /data\.limonitOreMax < data\.saprolitLGMin/);
   assert.match(settingsRules, /allow list, delete: if false/);
   assert.match(firestoreRules, /function isActiveUser\(\)[\s\S]*isSignedIn\(\)[\s\S]*status == 'ACTIVE'/);
   assert.doesNotMatch(firestoreRules, /request\.auth\.token/);

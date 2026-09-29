@@ -56,9 +56,7 @@ service cloud.firestore {
         && isNonNegativeCutOffGradeValue(data.limonitOreMin)
         && isNonNegativeCutOffGradeValue(data.limonitOreMax)
         && isNonNegativeCutOffGradeValue(data.wasteOBMax)
-        && data.wasteOBMax <= data.limonitOreMin
         && data.limonitOreMin <= data.limonitOreMax
-        && data.limonitOreMax < data.saprolitLGMin
         && data.saprolitLGMin <= data.saprolitLGMax
         && data.saprolitLGMax < data.saprolitHGMin
         && data.updatedAt is timestamp

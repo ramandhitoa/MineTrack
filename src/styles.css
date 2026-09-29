@@ -1904,10 +1904,20 @@ header {
     bottom:0;
     z-index:90;
     transition:left .2s;
-    width:260px;
+    width:min(260px, 100vw);
+    overflow-y:auto;
   }
   .sidebar.open {
     left:0;
+  }
+  .spec .cutoffActions {
+    flex-wrap:wrap;
+  }
+  .cutoffActions button {
+    min-width:88px;
+    min-height:44px;
+    padding:10px 12px;
+    font-size:11px;
   }
   .mobileMenu {
     display:grid;

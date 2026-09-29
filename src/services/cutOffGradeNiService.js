@@ -38,9 +38,7 @@ export function normalizeCutOffGradeNi(values) {
   }
 
   if (
-    normalized.wasteOBMax > normalized.limonitOreMin
-    || normalized.limonitOreMin > normalized.limonitOreMax
-    || normalized.limonitOreMax >= normalized.saprolitLGMin
+    normalized.limonitOreMin > normalized.limonitOreMax
     || normalized.saprolitLGMin > normalized.saprolitLGMax
     || normalized.saprolitLGMax >= normalized.saprolitHGMin
   ) {
