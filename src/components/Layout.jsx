@@ -229,6 +229,7 @@ function Sidebar({ activeTab, setActiveTab, mobileNav, setMobileNav, pendingCoun
               harian: ClipboardList,
               mingguan: CalendarDays,
               bulanan: CalendarDays,
+              'shift-reports': ClipboardList,
               oregetting: ClipboardList,
               absensi: UserCheck,
               pending: Clock3,

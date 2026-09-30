@@ -5,6 +5,7 @@ import {
   readOreGettingFromGoogleSheets,
 } from '../services/googleSheetsService';
 import { toWitaDateInput } from '../utils/formatters';
+import { formatOreGettingMethodId, getOreGettingAreaLabel } from '../utils/oreGetting';
 import { savePendingData, deletePendingData } from '../services/offlineDB';
 
 const STORAGE_KEY = 'mineTrack_ore_getting_records';
@@ -35,7 +36,7 @@ const oreGettingTimestampStyle = {
 
 const initialForm = {
   date: toWitaDateInput(),
-  areaPit: areaPitOptions[0],
+  areaPit: '',
   shift: 'Shift 1 (Siang)',
   metode: 'CEK',
   idMetode: '',
@@ -98,6 +99,7 @@ export default function OreGetting() {
         return {
           ...initialForm,
           ...saved.form,
+          areaPit: '',
           jumlahSampel: saved.form.jumlahSampel ?? '',
           metode: saved.form.metode || 'CEK',
         };
@@ -108,6 +110,7 @@ export default function OreGetting() {
 
     return initialForm;
   });
+  const [sampleNumber, setSampleNumber] = useState('');
 
   const [records, setRecords] = useState(() => {
     try {
@@ -124,6 +127,11 @@ export default function OreGetting() {
     }
   });
   const [sheetRecords, setSheetRecords] = useState([]);
+  const idMetode = formatOreGettingMethodId({
+    areaPit: form.areaPit,
+    metode: form.metode,
+    sampleNumber,
+  });
 
   useEffect(() => {
     localStorage.setItem(
@@ -215,6 +223,18 @@ export default function OreGetting() {
   const handleSubmit = async (event) => {
     event.preventDefault();
 
+    if (!form.areaPit || !areaPitOptions.includes(form.areaPit)) {
+      alert('Area PIT wajib dipilih.');
+      return;
+    }
+
+    if (!sampleNumber.trim() || !idMetode) {
+      alert(sampleNumber.trim()
+        ? 'Format nomor sampel tidak valid untuk metode yang dipilih.'
+        : 'Nomor sampel wajib diisi untuk membentuk ID Metode.');
+      return;
+    }
+
     const jumlahSampelValue =
       form.jumlahSampel === '' ||
       form.jumlahSampel === null ||
@@ -248,7 +268,7 @@ export default function OreGetting() {
       areaPit: form.areaPit,
       shift: form.shift,
       metode: form.metode,
-      idMetode: form.idMetode,
+      idMetode,
       acuan: form.acuan,
       titikBor: form.titikBor,
       blockModel: form.blockModel,
@@ -279,6 +299,7 @@ export default function OreGetting() {
         ...initialForm,
         date: toWitaDateInput(),
       });
+      setSampleNumber('');
 
       // ========================================================
       // JIKA ONLINE → COBA KIRIM LANGSUNG
@@ -349,12 +370,15 @@ export default function OreGetting() {
               onChange={(event) =>
                 updateField('areaPit', event.target.value)
               }
+              onInvalid={(event) => event.currentTarget.setCustomValidity('Area PIT wajib dipilih.')}
+              onInput={(event) => event.currentTarget.setCustomValidity('')}
               required
               style={oreGettingInputStyle}
             >
+              <option value="">Silahkan diisi</option>
               {areaPitOptions.map((area) => (
                 <option key={area} value={area}>
-                  {area}
+                  {getOreGettingAreaLabel(area)}
                 </option>
               ))}
             </select>
@@ -401,15 +425,29 @@ export default function OreGetting() {
           </label>
 
           <label>
+            <span>Nomor Sampel</span>
+
+            <input
+              type="text"
+              inputMode="numeric"
+              value={sampleNumber}
+              onChange={(event) => setSampleNumber(event.target.value)}
+              placeholder="Masukkan nomor sampel"
+              onInvalid={(event) => event.currentTarget.setCustomValidity('Nomor sampel wajib diisi.')}
+              onInput={(event) => event.currentTarget.setCustomValidity('')}
+              required
+              style={oreGettingInputStyle}
+            />
+          </label>
+
+          <label>
             <span>ID Metode</span>
 
             <input
               type="text"
-              value={form.idMetode}
-              onChange={(event) =>
-                updateField('idMetode', event.target.value)
-              }
-              placeholder="Masukkan ID metode"
+              value={idMetode}
+              readOnly
+              placeholder="ID Metode terbentuk dari pilihan dan nomor sampel"
               style={oreGettingInputStyle}
             />
           </label>

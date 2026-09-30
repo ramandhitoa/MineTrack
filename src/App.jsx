@@ -29,6 +29,7 @@ import Monthly from './pages/Monthly';
 import Pending from './pages/Pending';
 import Excel from './pages/Excel';
 import OreGetting from './pages/OreGetting';
+import ShiftReports from './pages/ShiftReports';
 import MasterAkunPage from './components/MasterAkunPage';
 import ManagementUserPage from './components/ManagementUserPage';
 import { pageTitles, STORAGE_KEYS } from './constants';
@@ -900,6 +901,7 @@ const syncGoogleSheets = async () => {
 
         {activeTab === 'mingguan' && <Weekly logs={logs} />}
         {activeTab === 'bulanan' && <Monthly logs={logs} />}
+        {activeTab === 'shift-reports' && <ShiftReports productionLogs={logs} role={currentRole} />}
 
         {activeTab === 'oregetting' && <OreGetting />}
 
