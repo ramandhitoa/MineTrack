@@ -34,6 +34,15 @@ export const GOOGLE_SHEET_NAME = 'Laporan Produksi';
 export const GOOGLE_ATTENDANCE_SHEET_NAME = 'Daily Absensi';
 export const GOOGLE_ORE_GETTING_SHEET_NAME = 'Laporan Ore Getting';
 
+export function buildOreGettingPayloadItem(record, fallbackDate) {
+  return {
+    ...record,
+    date: record.date || fallbackDate,
+    submissionTimestamp: record.submissionTimestamp,
+    reporterName: String(record.reporterName ?? '').trim(),
+  };
+}
+
 export function normalizeAttendanceValue(value = '') {
   return String(value ?? '').trim().replace(/\s+/g, ' ');
 }

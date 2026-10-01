@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { areaPitOptions } from '../data/initialData';
 import {
+  buildOreGettingPayloadItem,
   DEFAULT_GOOGLE_APPS_SCRIPT_URL,
   readOreGettingFromGoogleSheets,
 } from '../services/googleSheetsService';
@@ -195,13 +196,7 @@ export default function OreGetting({ authSession }) {
       },
       body: JSON.stringify({
         type: 'oregetting',
-        items: [
-          {
-            ...record,
-            date: record.date || toWitaDateInput(),
-            submissionTimestamp: record.submissionTimestamp,
-          },
-        ],
+        items: [buildOreGettingPayloadItem(record, toWitaDateInput())],
       }),
     });
 

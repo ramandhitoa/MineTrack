@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { formatOreGettingMethodId, getOreGettingAreaLabel } from '../utils/oreGetting.js';
+import { buildOreGettingPayloadItem } from './googleSheetsService.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const sourceFiles = [
@@ -96,12 +97,19 @@ test('Ore Getting derives reporter from the login session and carries it through
   const recordEnd = oreGettingSource.indexOf('\n    };', recordStart);
   assert.ok(recordStart >= 0 && recordEnd > recordStart);
   assert.match(oreGettingSource.slice(recordStart, recordEnd), /reporterName,/);
-  assert.match(oreGettingSource, /\.\.\.record,[\s\S]*?submissionTimestamp: record\.submissionTimestamp/);
+  assert.match(oreGettingSource, /items:\s*\[buildOreGettingPayloadItem\(record, toWitaDateInput\(\)\)\]/);
+  assert.deepEqual(
+    buildOreGettingPayloadItem({ date: '', submissionTimestamp: '10:44 WITA', reporterName: 'Amelia Sombo' }, '2026-10-01'),
+    { date: '2026-10-01', submissionTimestamp: '10:44 WITA', reporterName: 'Amelia Sombo' }
+  );
 });
 
 test('Ore Getting writer stores reporter in column L without rewriting existing rows', () => {
   sourceFiles.forEach((source) => {
-    assert.match(source, /item\.reporterName\s*\|\|\s*''/);
+    const writerStart = source.indexOf('function oreGettingToRow_(');
+    const writerEnd = source.indexOf('function parseOreGettingSampleCount_', writerStart);
+    const writer = source.slice(writerStart, writerEnd);
+    assert.match(writer, /submittedAt,[\s\S]*?item\.reporterName\s*\|\|\s*''/);
     const helperStart = source.indexOf('function ensureOreGettingReporterHeader_(');
     assert.ok(helperStart >= 0);
     const nextFunction = source.indexOf('\nfunction ', helperStart + 1);
