@@ -168,7 +168,7 @@ export default function App() {
     try {
       const remoteLogs = await readLogsFromGoogleSheets(gsUrl);
       setGsRemoteCount(remoteLogs.length);
-      if (remoteLogs.length > 0) setLogs(remoteLogs);
+      setLogs(remoteLogs);
       setGsStatus(`Terhubung • ${remoteLogs.length} baris`);
       if (showNotification) notify(`Data Google Sheets dimuat: ${remoteLogs.length} baris.`);
       return remoteLogs;
@@ -196,7 +196,7 @@ export default function App() {
         if (cancelled) return;
 
         setGsRemoteCount(remoteLogs.length);
-        if (remoteLogs.length > 0) setLogs(remoteLogs);
+        setLogs(remoteLogs);
         setGsStatus(`Terhubung • ${remoteLogs.length} baris`);
         notify(`Data Google Sheets berhasil dimuat: ${remoteLogs.length} baris.`);
       })
@@ -738,7 +738,7 @@ const syncGoogleSheets = async () => {
     }
 
     const remoteLogs = await readLogsFromGoogleSheets(gsUrl);
-    if (remoteLogs.length > 0) setLogs(remoteLogs);
+    setLogs(remoteLogs);
     setGsRemoteCount(remoteLogs.length);
     setGsStatus(`Terhubung • ${remoteLogs.length} baris`);
     notify(

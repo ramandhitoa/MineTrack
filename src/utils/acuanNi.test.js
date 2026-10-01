@@ -19,6 +19,7 @@ const reports = [
   { niGrade: 1.8, dumpingArea: 'DMP-001', pit: 'PIT BETA', date: '2026-09-30' },
 ];
 const dashboardSource = readFileSync(new URL('../pages/Dashboard.jsx', import.meta.url), 'utf8');
+const appSource = readFileSync(new URL('../App.jsx', import.meta.url), 'utf8');
 const monthlySource = readFileSync(new URL('../pages/Monthly.jsx', import.meta.url), 'utf8');
 const googleSheetsSource = readFileSync(new URL('../services/googleSheetsService.js', import.meta.url), 'utf8');
 const appsScriptSource = readFileSync(new URL('../../google-apps-script/Code.gs', import.meta.url), 'utf8');
@@ -126,6 +127,14 @@ test('Dashboard displays five recent rows but calculates Ni average from all log
   assert.equal(displayedLogs.length, 5);
   assertAverage(average, 1.95);
   assert.match(dashboardSource, /<LogTable logs=\{logs\.slice\(0, 5\)\} averageLogs=\{logs\} \/>/);
+});
+
+test('Dashboard refresh replaces its dataset even when Google Sheets returns no rows', () => {
+  assert.ok((appSource.match(/setLogs\(remoteLogs\)/g) || []).length >= 3);
+  assert.doesNotMatch(appSource, /remoteLogs\.length\s*>\s*0\)\s*setLogs\(remoteLogs\)/);
+  assert.match(appSource, /const metrics = useMemo\(\(\) => \{[\s\S]*?\}, \[logs\]\);/);
+  assert.match(appSource, /const chartData = useMemo\(\(\) => \([\s\S]*?\), \[logs\]\);/);
+  assert.match(appSource, /const loadingStats = useMemo\(\(\) => \{[\s\S]*?\}, \[logs\]\);/);
 });
 
 test('Apps Script and Sheets template read/write Acuan Ni through the locale-aware parser', () => {
