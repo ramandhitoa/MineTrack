@@ -12,6 +12,11 @@ import {
   parseAcuanNiValue,
   readAcuanNiFromSpreadsheetRow,
 } from './acuanNi.js';
+import {
+  aggregateLoadingMethod,
+  aggregateProduction,
+  getLoadingPeriods,
+} from './dashboardAggregations.js';
 
 const reports = [
   { niGrade: 1.6, dumpingArea: 'DMP-001', pit: 'PIT BETA', date: '2026-09-28' },
@@ -19,7 +24,9 @@ const reports = [
   { niGrade: 1.8, dumpingArea: 'DMP-001', pit: 'PIT BETA', date: '2026-09-30' },
 ];
 const dashboardSource = readFileSync(new URL('../pages/Dashboard.jsx', import.meta.url), 'utf8');
+const dashboardAggregationSource = readFileSync(new URL('./dashboardAggregations.js', import.meta.url), 'utf8');
 const appSource = readFileSync(new URL('../App.jsx', import.meta.url), 'utf8');
+const offlineSyncSource = readFileSync(new URL('../services/offlineSync.js', import.meta.url), 'utf8');
 const monthlySource = readFileSync(new URL('../pages/Monthly.jsx', import.meta.url), 'utf8');
 const googleSheetsSource = readFileSync(new URL('../services/googleSheetsService.js', import.meta.url), 'utf8');
 const appsScriptSource = readFileSync(new URL('../../google-apps-script/Code.gs', import.meta.url), 'utf8');

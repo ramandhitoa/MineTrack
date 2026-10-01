@@ -17,32 +17,144 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
+import { useEffect, useMemo, useState } from 'react';
 import { Card, LogTable } from '../components/Common';
-import { fmt } from '../utils/formatters';
+import { fmt, toWitaDateInput } from '../utils/formatters';
+import { parseAcuanNiValue } from '../utils/acuanNi';
+import {
+  aggregateLoadingMethod,
+  aggregateProduction,
+  formatPeriodLabel,
+  getLoadingPeriods,
+} from '../utils/dashboardAggregations';
+import { getRecentProductionLogs } from '../utils/dashboardRecentLogs';
 
 const PIE_COLORS = ['#38bdf8', '#3b82f6'];
+const PERIODS = [
+  { id: 'daily', label: 'DAILY' },
+  { id: 'weekly', label: 'WEEKLY' },
+  { id: 'monthly', label: 'MONTHLY' },
+];
 
-export default function Dashboard({ metrics, logs, chartData, loadingStats, pendingCount, setActiveTab }) {
+function matchesSearch(log, keyword) {
+  if (!keyword) return true;
+  return Object.values(log).some((value) => {
+    if (value === null || value === undefined) return false;
+    const text = Array.isArray(value) ? value.join(' ') : String(value);
+    return text.toLocaleLowerCase().includes(keyword);
+  });
+}
+
+export default function Dashboard({ logs = [], pendingCount, setActiveTab }) {
+  const [filterPit, setFilterPit] = useState('Semua');
+  const [filterMaterial, setFilterMaterial] = useState('Semua');
+  const [query, setQuery] = useState('');
+  const [today, setToday] = useState(() => toWitaDateInput());
+  const [productionPeriod, setProductionPeriod] = useState('daily');
+  const [loadingPeriod, setLoadingPeriod] = useState('daily');
+  const [selectedLoadingPeriod, setSelectedLoadingPeriod] = useState('');
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setToday(toWitaDateInput()), 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  const pitOptions = useMemo(() => [...new Set(logs.map((log) => log.pit).filter(Boolean))].sort(), [logs]);
+  const materialOptions = useMemo(() => [...new Set(logs.map((log) => log.material).filter(Boolean))].sort(), [logs]);
+  const filteredLogs = useMemo(() => {
+    const keyword = query.trim().toLocaleLowerCase();
+    return logs.filter((log) => (
+      (filterPit === 'Semua' || log.pit === filterPit)
+      && (filterMaterial === 'Semua' || log.material === filterMaterial)
+      && matchesSearch(log, keyword)
+    ));
+  }, [logs, filterPit, filterMaterial, query]);
+  const recentLogs = useMemo(
+    () => getRecentProductionLogs(filteredLogs, today),
+    [filteredLogs, today]
+  );
+  const dashboardMetrics = useMemo(() => {
+    const totals = filteredLogs.reduce((result, log) => {
+      result.rit += Number(log.ritToday) || 0;
+      result.total += Number(log.ritTotal) || 0;
+      result.ton += Number(log.tonnage) || 0;
+      const ni = parseAcuanNiValue(log.niGrade);
+      if (ni !== null) {
+        const tonnage = Number(log.tonnage) || 0;
+        result.weightedNi += tonnage * ni;
+        result.niTonnage += tonnage;
+      }
+      return result;
+    }, { rit: 0, total: 0, ton: 0, weightedNi: 0, niTonnage: 0 });
+    return {
+      ...totals,
+      ni: totals.niTonnage ? (totals.weightedNi / totals.niTonnage).toFixed(2) : null,
+    };
+  }, [filteredLogs]);
+  const productionData = useMemo(
+    () => aggregateProduction(filteredLogs, productionPeriod),
+    [filteredLogs, productionPeriod]
+  );
+  const loadingPeriods = useMemo(
+    () => getLoadingPeriods(filteredLogs, loadingPeriod),
+    [filteredLogs, loadingPeriod]
+  );
+  const activeLoadingPeriod = loadingPeriods.includes(selectedLoadingPeriod)
+    ? selectedLoadingPeriod
+    : loadingPeriods[0] || '';
+  const loadingStats = useMemo(
+    () => aggregateLoadingMethod(filteredLogs, loadingPeriod, activeLoadingPeriod),
+    [filteredLogs, loadingPeriod, activeLoadingPeriod]
+  );
+
   return (
     <section className="dashboard">
+      <div className="panel filters">
+        <div>
+          <label>
+            Filter PIT
+            <select value={filterPit} onChange={(event) => setFilterPit(event.target.value)}>
+              <option value="Semua">Semua</option>
+              {pitOptions.map((pit) => <option key={pit} value={pit}>{pit}</option>)}
+            </select>
+          </label>
+          <label>
+            Filter Material
+            <select value={filterMaterial} onChange={(event) => setFilterMaterial(event.target.value)}>
+              <option value="Semua">Semua</option>
+              {materialOptions.map((material) => <option key={material} value={material}>{material}</option>)}
+            </select>
+          </label>
+          <label>
+            Cari Data Dashboard
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Cari tanggal, PIT, sample, material..."
+            />
+          </label>
+        </div>
+        <div className="filterActions">Total Data: {filteredLogs.length} Entry</div>
+      </div>
+
       <div className="kpis">
         <Card
           label="Total Ritase Hari Ini"
-          value={fmt(metrics.rit)}
+          value={fmt(dashboardMetrics.rit)}
           unit="Rit"
-          sub={`Akumulasi Ritase: ${fmt(metrics.total)} Rit`}
+          sub={`Akumulasi Ritase: ${fmt(dashboardMetrics.total)} Rit`}
           accent="green"
         />
         <Card
           label="Estimasi Tonase Ore (MT)"
-          value={fmt(metrics.ton)}
+          value={fmt(dashboardMetrics.ton)}
           unit="MT"
-          sub={`Rata-Rata Ni: ${metrics.ni ?? '-'}${metrics.ni === null ? '' : '% Ni'}`}
+          sub={`Rata-Rata Ni: ${dashboardMetrics.ni ?? '-'}${dashboardMetrics.ni === null ? '' : '% Ni'}`}
           accent="amber"
         />
         <Card
           label="Total Dumpingan"
-          value={logs.filter((log) => String(log.dumpingArea ?? '').trim() !== '').length}
+          value={filteredLogs.filter((log) => String(log.dumpingArea ?? '').trim() !== '').length}
           unit="Dumpingan"
           sub="Laporan dengan dumping terisi"
           accent="cyan"
@@ -57,8 +169,18 @@ export default function Dashboard({ metrics, logs, chartData, loadingStats, pend
       </div>
 
       <div className="chartGrid">
-        <ProductionChart data={chartData} />
-        <LoadingMethodChart data={loadingStats} />
+        <ProductionChart data={productionData} period={productionPeriod} setPeriod={setProductionPeriod} />
+        <LoadingMethodChart
+          data={loadingStats}
+          period={loadingPeriod}
+          setPeriod={(nextPeriod) => {
+            setLoadingPeriod(nextPeriod);
+            setSelectedLoadingPeriod('');
+          }}
+          periods={loadingPeriods}
+          selectedPeriod={activeLoadingPeriod}
+          setSelectedPeriod={setSelectedLoadingPeriod}
+        />
       </div>
 
       <div className="panel">
@@ -68,13 +190,32 @@ export default function Dashboard({ metrics, logs, chartData, loadingStats, pend
             Buka Semua Log Harian →
           </button>
         </div>
-        <LogTable logs={logs.slice(0, 5)} averageLogs={logs} />
+        <LogTable logs={recentLogs} averageLogs={recentLogs} />
       </div>
     </section>
   );
 }
 
-function ProductionChart({ data }) {
+function PeriodTabs({ value, onChange }) {
+  return (
+    <div className="chartPeriodTabs" role="tablist" aria-label="Periode grafik">
+      {PERIODS.map((period) => (
+        <button
+          key={period.id}
+          type="button"
+          role="tab"
+          aria-selected={value === period.id}
+          className={value === period.id ? 'active' : ''}
+          onClick={() => onChange(period.id)}
+        >
+          {period.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function ProductionChart({ data, period, setPeriod }) {
   return (
     <div className="panel">
       <div className="panelHead">
@@ -84,6 +225,7 @@ function ProductionChart({ data }) {
         </div>
         <b>Target: ≥ 1.60% Ni</b>
       </div>
+      <PeriodTabs value={period} onChange={setPeriod} />
 
       <div className="chart productionChart">
         <ResponsiveContainer width="100%" height="100%">
@@ -123,11 +265,28 @@ function ProductionChart({ data }) {
   );
 }
 
-function LoadingMethodChart({ data }) {
+function LoadingMethodChart({ data, period, setPeriod, periods, selectedPeriod, setSelectedPeriod }) {
   return (
     <div className="panel">
-      <h3>Distribusi Loading Method</h3>
-      <p>Penggunaan metode pemuatan excavator</p>
+      <div className="panelHead">
+        <div>
+          <h3>Distribusi Loading Method</h3>
+          <p>Penggunaan metode pemuatan excavator</p>
+        </div>
+      </div>
+      <PeriodTabs value={period} onChange={setPeriod} />
+      <label className="loadingPeriodSelect">
+        Periode
+        <select
+          value={selectedPeriod}
+          onChange={(event) => setSelectedPeriod(event.target.value)}
+          disabled={!periods.length}
+        >
+          {periods.length === 0 ? <option value="">Tidak ada data</option> : periods.map((key) => (
+            <option key={key} value={key}>{formatPeriodLabel(key, period)}</option>
+          ))}
+        </select>
+      </label>
 
       <div className="chart small loadingChart">
         <ResponsiveContainer width="100%" height="100%">

@@ -250,7 +250,11 @@ export default function App() {
   useEffect(() => {
     if (!gsUrl) return undefined;
 
-    const stopAutoSync = startOfflineAutoSync(gsUrl);
+    const stopAutoSync = startOfflineAutoSync(gsUrl, (remoteLogs) => {
+      if (!Array.isArray(remoteLogs)) return;
+      setLogs(remoteLogs);
+      setGsRemoteCount(remoteLogs.length);
+    });
 
     return () => {
       if (typeof stopAutoSync === 'function') {

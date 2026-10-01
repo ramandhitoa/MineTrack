@@ -19,6 +19,7 @@ import {
 
 import {
   withProductionRecordIds,
+  readLogsFromGoogleSheets,
   syncLogsToGoogleSheets,
   syncAttendanceToGoogleSheets,
 } from './googleSheetsService';
@@ -44,7 +45,7 @@ export function isOnline() {
 // SYNC SATU DATA
 // ------------------------------------------------------------
 
-async function syncOneItem(item, gsUrl) {
+async function syncOneItem(item, gsUrl, onProductionSynced) {
 
   if (!item || !item.id) {
     return false;
@@ -72,6 +73,8 @@ async function syncOneItem(item, gsUrl) {
       );
 
       await syncLogsToGoogleSheets(gsUrl, productionItems);
+      const remoteLogs = await readLogsFromGoogleSheets(gsUrl).catch(() => null);
+      if (Array.isArray(remoteLogs)) onProductionSynced?.(remoteLogs);
 
       await deletePendingData(item.id);
 
@@ -247,7 +250,7 @@ async function syncOneItem(item, gsUrl) {
 // SYNC SEMUA DATA PENDING
 // ------------------------------------------------------------
 
-export async function syncPendingData(gsUrl) {
+export async function syncPendingData(gsUrl, onProductionSynced) {
 
   // ----------------------------------------------------------
   // JANGAN JALANKAN DUA SYNC BERSAMAAN
@@ -378,7 +381,8 @@ export async function syncPendingData(gsUrl) {
       const success =
         await syncOneItem(
           item,
-          gsUrl
+          gsUrl,
+          onProductionSynced
         );
 
 
@@ -434,7 +438,7 @@ export async function syncPendingData(gsUrl) {
 // AUTO SYNC SAAT INTERNET KEMBALI
 // ------------------------------------------------------------
 
-export function startOfflineAutoSync(gsUrl) {
+export function startOfflineAutoSync(gsUrl, onProductionSynced) {
 
   console.log(
     '🔄 MineTrack Offline Auto Sync aktif.'
@@ -452,7 +456,8 @@ export function startOfflineAutoSync(gsUrl) {
     );
 
     await syncPendingData(
-      gsUrl
+      gsUrl,
+      onProductionSynced
     );
   };
 
@@ -472,7 +477,8 @@ export function startOfflineAutoSync(gsUrl) {
     setTimeout(() => {
 
       syncPendingData(
-        gsUrl
+        gsUrl,
+        onProductionSynced
       );
 
     }, 1000);
@@ -492,7 +498,8 @@ export function startOfflineAutoSync(gsUrl) {
       ) {
 
         syncPendingData(
-          gsUrl
+          gsUrl,
+          onProductionSynced
         );
 
       }
