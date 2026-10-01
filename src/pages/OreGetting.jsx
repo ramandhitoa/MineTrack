@@ -432,7 +432,7 @@ export default function OreGetting({ authSession }) {
 
             <input
               type="text"
-              inputMode="numeric"
+              inputMode="text"
               value={sampleNumber}
               onChange={(event) => setSampleNumber(event.target.value)}
               placeholder="Masukkan nomor sampel"
