@@ -11,6 +11,7 @@ const sourceFiles = [
   readFileSync(new URL('./googleSheetsService.js', import.meta.url), 'utf8'),
 ];
 const oreGettingSource = readFileSync(new URL('../pages/OreGetting.jsx', import.meta.url), 'utf8');
+const appSource = readFileSync(new URL('../App.jsx', import.meta.url), 'utf8');
 
 function oreGettingHeaders(source) {
   const match = source.match(/const ORE_GETTING_HEADERS\s*=\s*\[([\s\S]*?)\]/);
@@ -30,10 +31,24 @@ const expectedHeaders = [
   'Elevasi',
   'Jumlah Sampel',
   'Timestamp Pengumpulan',
+  'Nama Pelapor',
 ];
 
-test('Code.gs and embedded Apps Script use the agreed A-K Ore Getting headers', () => {
+test('Code.gs and embedded Apps Script preserve Ore Getting A-K and append reporter in L', () => {
   sourceFiles.forEach((source) => assert.deepEqual(oreGettingHeaders(source), expectedHeaders));
+  assert.deepEqual(expectedHeaders.slice(0, 11), [
+    'Tanggal',
+    'Area PIT',
+    'Shift',
+    'Metode',
+    'ID Metode',
+    'Acuan',
+    'Titik Bor',
+    'Block Model',
+    'Elevasi',
+    'Jumlah Sampel',
+    'Timestamp Pengumpulan',
+  ]);
 });
 
 test('Ore Getting object writer writes quantity before timestamp', () => {
@@ -52,14 +67,14 @@ test('Ore Getting READ maps quantity and timestamp by header and preserves legac
     assert.match(source, /submissionTimestamp:[\s\S]{0,100}timestampIndex/);
   }
 
-  assert.match(codeGs, /rowToOreGettingItem_\(row, oreSampleCountIndex, oreTimestampIndex\)/);
+  assert.match(codeGs, /rowToOreGettingItem_\(row, oreSampleCountIndex, oreTimestampIndex, oreReporterNameIndex\)/);
   assert.match(codeGs, /oreTimestampIndex\s*<\s*0\)\s*oreTimestampIndex\s*=\s*9/);
-  assert.match(sheetsTemplate, /rowToOreGettingItem_\(row, sampleCountIndex, timestampIndex\)/);
+  assert.match(sheetsTemplate, /rowToOreGettingItem_\(row, sampleCountIndex, timestampIndex, reporterNameIndex\)/);
   assert.match(sheetsTemplate, /timestampIndex\s*<\s*0\)\s*timestampIndex\s*=\s*9/);
   assert.match(sheetsTemplate, /row\.length\s*>=\s*11\s*\?\s*10\s*:\s*9/);
 });
 
-test('Code.gs array writer maps item[0..9] explicitly and appends server timestamp', () => {
+test('Code.gs array writer maps item[0..9], appends server timestamp, then reporter in L', () => {
   const codeGs = sourceFiles[0];
   const arrayBranch = codeGs.match(/if \(\s*Array\.isArray\(item\)\s*\)\s*\{([\s\S]*?)\n\s*return row;/)?.[1];
   assert.ok(arrayBranch);
@@ -68,7 +83,32 @@ test('Code.gs array writer maps item[0..9] explicitly and appends server timesta
   }
   assert.match(arrayBranch, /parseOreGettingSampleCount_\(item\[9\]\)/);
   assert.match(arrayBranch, /submittedAt/);
+  assert.match(arrayBranch, /item\[11\]/);
   assert.doesNotMatch(arrayBranch, /item\.slice\(/);
+});
+
+test('Ore Getting derives reporter from the login session and carries it through save payload', () => {
+  assert.match(appSource, /<OreGetting authSession=\{authSession\} \/>/);
+  assert.match(oreGettingSource, /formatReporterName\(authSession\?\.user\?\.name\)/);
+  assert.doesNotMatch(oreGettingSource, /Nama Pelapor|namaPelapor/);
+
+  const recordStart = oreGettingSource.indexOf('const newRecord = {');
+  const recordEnd = oreGettingSource.indexOf('\n    };', recordStart);
+  assert.ok(recordStart >= 0 && recordEnd > recordStart);
+  assert.match(oreGettingSource.slice(recordStart, recordEnd), /reporterName,/);
+  assert.match(oreGettingSource, /\.\.\.record,[\s\S]*?submissionTimestamp: record\.submissionTimestamp/);
+});
+
+test('Ore Getting writer stores reporter in column L without rewriting existing rows', () => {
+  sourceFiles.forEach((source) => {
+    assert.match(source, /item\.reporterName\s*\|\|\s*''/);
+    const helperStart = source.indexOf('function ensureOreGettingReporterHeader_(');
+    assert.ok(helperStart >= 0);
+    const nextFunction = source.indexOf('\nfunction ', helperStart + 1);
+    const helper = source.slice(helperStart, nextFunction);
+    assert.match(helper, /getRange\(1, 12\)\.setValue\(ORE_GETTING_HEADERS\[11\]\)/);
+    assert.doesNotMatch(helper, /clearContents|deleteRow/);
+  });
 });
 test('writes are blocked on the legacy header until the sheet is manually aligned', () => {
   assert.match(sourceFiles[0], /if \(!hasOreGettingHeaders_\(sheet\)\)\s*\{\s*throw new Error\('Header Laporan Ore Getting harus:/);

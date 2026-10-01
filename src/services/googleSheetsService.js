@@ -155,7 +155,8 @@ const ORE_GETTING_HEADERS = [
   'Block Model',
   'Elevasi',
   'Jumlah Sampel',
-  'Timestamp Pengumpulan'
+  'Timestamp Pengumpulan',
+  'Nama Pelapor'
 ];
 
 const ATTENDANCE_HEADERS = [
@@ -206,10 +207,11 @@ function doGet(e) {
       const values = oreSheet.getRange(1, 1, lastRow, Math.max(ORE_GETTING_HEADERS.length, oreSheet.getLastColumn())).getDisplayValues();
       const sampleCountIndex = values[0].findIndex(header => String(header || '').trim().toLowerCase() === 'jumlah sampel');
       let timestampIndex = values[0].findIndex(header => String(header || '').trim().toLowerCase() === 'timestamp pengumpulan');
+      const reporterNameIndex = values[0].findIndex(header => String(header || '').trim().toLowerCase() === 'nama pelapor');
       if (timestampIndex < 0) timestampIndex = 9;
       const dataRows = values.slice(1)
         .filter(row => row.some(value => String(value).trim() !== ''))
-        .map(row => rowToOreGettingItem_(row, sampleCountIndex, timestampIndex));
+        .map(row => rowToOreGettingItem_(row, sampleCountIndex, timestampIndex, reporterNameIndex));
       return respond_({ success: true, items: dataRows, values: dataRows, count: dataRows.length }, getCallback_(e));
     }
 
@@ -557,6 +559,7 @@ function saveOreGetting_(payload) {
         row.push('');
         row.push(item[9] || submittedAt);
       }
+      row.push(item.length >= 12 ? item[11] || '' : '');
       return row;
     }
     return oreGettingToRow_(item, submittedAt);
@@ -594,8 +597,35 @@ function getOreGettingSheet_() {
   if (!sheet) {
     sheet = ss.insertSheet(ORE_GETTING_SHEET_NAME, 2);
   }
-  ensureHeaders_(sheet, ORE_GETTING_HEADERS);
+  ensureOreGettingReporterHeader_(sheet);
   return sheet;
+}
+
+function ensureOreGettingReporterHeader_(sheet) {
+  if (!sheet) return;
+
+  if (sheet.getLastRow() === 0) {
+    sheet.getRange(1, 1, 1, ORE_GETTING_HEADERS.length).setValues([ORE_GETTING_HEADERS]);
+    return;
+  }
+
+  const currentHeaders = sheet.getRange(1, 1, 1, 11).getDisplayValues()[0];
+  const existingHeadersMatch = ORE_GETTING_HEADERS.slice(0, 11).every((header, index) => (
+    String(currentHeaders[index] || '').trim().toLowerCase() === header.toLowerCase()
+  ));
+  if (!existingHeadersMatch) {
+    throw new Error('Header Ore Getting A-K tidak sesuai; header dan data lama tidak diubah.');
+  }
+
+  if (sheet.getMaxColumns() < 12) sheet.insertColumnAfter(sheet.getMaxColumns());
+
+  const reporterHeader = String(sheet.getRange(1, 12).getDisplayValue() || '').trim();
+  if (reporterHeader.toLowerCase() === ORE_GETTING_HEADERS[11].toLowerCase()) return;
+  if (reporterHeader) {
+    throw new Error('Kolom L Ore Getting sudah memiliki header lain; header dan data lama tidak diubah.');
+  }
+
+  sheet.getRange(1, 12).setValue(ORE_GETTING_HEADERS[11]);
 }
 
 function ensureHeaders_(sheet, headers) {
@@ -675,7 +705,8 @@ function oreGettingToRow_(item, submittedAt) {
     item.blockModel || '',
     item.elevasi || '',
     parseOreGettingSampleCount_(item.jumlahSampel) ?? '',
-    item.submissionTimestamp || item.createdAt || item.timestamp || submittedAt
+    item.submissionTimestamp || item.createdAt || item.timestamp || submittedAt,
+    item.reporterName || ''
   ];
 }
 
@@ -770,7 +801,8 @@ function rowToOreGettingItem_(row, sampleCountIndex, timestampIndex) {
     blockModel: String(row[7] || '').trim(),
     elevasi: String(row[8] || '').trim(),
     jumlahSampel: sampleCountIndex >= 0 ? parseOreGettingSampleCount_(row[sampleCountIndex]) : null,
-    submissionTimestamp: String(row[timestampIndex] || '').trim()
+    submissionTimestamp: String(row[timestampIndex] || '').trim(),
+    reporterName: reporterNameIndex >= 0 ? String(row[reporterNameIndex] || '').trim() : ''
   };
 }
 
@@ -1283,6 +1315,7 @@ export function readOreGettingFromGoogleSheets(url) {
             elevasi: String(row[8] || ''),
             jumlahSampel: row.length >= 11 ? parseOreGettingSampleCountValue_(row[9]) : null,
             submissionTimestamp: String(row[row.length >= 11 ? 10 : 9] || ''),
+            reporterName: String(row[11] || ''),
           };
         }
 

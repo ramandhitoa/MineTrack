@@ -903,7 +903,7 @@ const syncGoogleSheets = async () => {
         {activeTab === 'bulanan' && <Monthly logs={logs} />}
         {activeTab === 'shift-reports' && <ShiftReports productionLogs={logs} role={currentRole} />}
 
-        {activeTab === 'oregetting' && <OreGetting />}
+        {activeTab === 'oregetting' && <OreGetting authSession={authSession} />}
 
         {activeTab === 'absensi' && (
           <DailyAttendance

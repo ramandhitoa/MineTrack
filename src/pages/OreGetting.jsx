@@ -6,6 +6,7 @@ import {
 } from '../services/googleSheetsService';
 import { toWitaDateInput } from '../utils/formatters';
 import { formatOreGettingMethodId, getOreGettingAreaLabel } from '../utils/oreGetting';
+import { formatReporterName } from '../utils/reporterName';
 import { savePendingData, deletePendingData } from '../services/offlineDB';
 
 const STORAGE_KEY = 'mineTrack_ore_getting_records';
@@ -88,7 +89,7 @@ function getCurrentWitaTime() {
   }).format(new Date());
 }
 
-export default function OreGetting() {
+export default function OreGetting({ authSession }) {
   const [form, setForm] = useState(() => {
     try {
       const saved = JSON.parse(
@@ -223,6 +224,12 @@ export default function OreGetting() {
   const handleSubmit = async (event) => {
     event.preventDefault();
 
+    const reporterName = formatReporterName(authSession?.user?.name);
+    if (!reporterName) {
+      alert('Nama akun tidak tersedia. Silakan login kembali.');
+      return;
+    }
+
     if (!form.areaPit || !areaPitOptions.includes(form.areaPit)) {
       alert('Area PIT wajib dipilih.');
       return;
@@ -279,6 +286,7 @@ export default function OreGetting() {
           : jumlahSampelValue,
       createdAt: timestamp,
       submissionTimestamp: timestamp,
+      reporterName,
     };
 
     try {

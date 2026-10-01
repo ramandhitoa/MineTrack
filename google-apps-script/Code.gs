@@ -82,7 +82,8 @@ const ORE_GETTING_HEADERS = [
   'Block Model',
   'Elevasi',
   'Jumlah Sampel',
-  'Timestamp Pengumpulan'
+  'Timestamp Pengumpulan',
+  'Nama Pelapor'
 ];
 
 
@@ -242,6 +243,9 @@ function doGet(e) {
       var oreTimestampIndex = oreValues[0].findIndex(function(header) {
         return String(header || '').trim().toLowerCase() === 'timestamp pengumpulan';
       });
+      var oreReporterNameIndex = oreValues[0].findIndex(function(header) {
+        return String(header || '').trim().toLowerCase() === 'nama pelapor';
+      });
       if (oreTimestampIndex < 0) oreTimestampIndex = 9;
 
 
@@ -262,7 +266,7 @@ function doGet(e) {
 
           })
           .map(function(row) {
-            return rowToOreGettingItem_(row, oreSampleCountIndex, oreTimestampIndex);
+            return rowToOreGettingItem_(row, oreSampleCountIndex, oreTimestampIndex, oreReporterNameIndex);
           });
 
 
@@ -2203,7 +2207,8 @@ function saveOreGetting_(
             item[7] || '',
             item[8] || '',
             parseOreGettingSampleCount_(item[9]) ?? '',
-            submittedAt
+            submittedAt,
+            item.length >= 12 ? item[11] || '' : ''
           ];
 
 
@@ -2357,9 +2362,33 @@ function getOreGettingSheet_() {
     sheet.getRange(1, 1, 1, ORE_GETTING_HEADERS.length).setValues([ORE_GETTING_HEADERS]);
   }
 
+  ensureOreGettingReporterHeader_(sheet);
+
 
   return sheet;
 
+}
+
+function ensureOreGettingReporterHeader_(sheet) {
+  if (!sheet || sheet.getLastRow() === 0) return;
+
+  var currentHeaders = sheet.getRange(1, 1, 1, 11).getDisplayValues()[0];
+  var existingHeadersMatch = ORE_GETTING_HEADERS.slice(0, 11).every(function(header, index) {
+    return String(currentHeaders[index] || '').trim().toLowerCase() === header.toLowerCase();
+  });
+  if (!existingHeadersMatch) {
+    throw new Error('Header Ore Getting A-K tidak sesuai; header dan data lama tidak diubah.');
+  }
+
+  if (sheet.getMaxColumns() < 12) sheet.insertColumnAfter(sheet.getMaxColumns());
+
+  var reporterHeader = String(sheet.getRange(1, 12).getDisplayValue() || '').trim();
+  if (reporterHeader.toLowerCase() === ORE_GETTING_HEADERS[11].toLowerCase()) return;
+  if (reporterHeader) {
+    throw new Error('Kolom L Ore Getting sudah memiliki header lain; header dan data lama tidak diubah.');
+  }
+
+  sheet.getRange(1, 12).setValue(ORE_GETTING_HEADERS[11]);
 }
 
 
@@ -2885,7 +2914,9 @@ function oreGettingToRow_(
 
     parseOreGettingSampleCount_(item.jumlahSampel) ?? '',
 
-    submittedAt
+    submittedAt,
+
+    item.reporterName || ''
 
   ];
 
@@ -3125,7 +3156,8 @@ function normalizeMaterial_(
 function rowToOreGettingItem_(
   row,
   sampleCountIndex,
-  timestampIndex
+  timestampIndex,
+  reporterNameIndex
 ) {
 
   return {
@@ -3183,7 +3215,12 @@ function rowToOreGettingItem_(
     submissionTimestamp:
       String(
         row[timestampIndex] || ''
-      ).trim()
+      ).trim(),
+
+    reporterName:
+      reporterNameIndex >= 0
+        ? String(row[reporterNameIndex] || '').trim()
+        : '',
 
   };
 
