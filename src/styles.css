@@ -624,6 +624,51 @@ header {
   border-radius:7px;
   border:1px solid #60a5fa55;
 }
+.chartPeriodTabs {
+  display:flex;
+  gap:4px;
+  width:max-content;
+  max-width:100%;
+  margin:0 0 8px;
+  padding:3px;
+  border:1px solid var(--border);
+  border-radius:8px;
+  background:var(--bg-soft);
+}
+.chartPeriodTabs button {
+  min-height:30px;
+  padding:5px 9px;
+  border:1px solid transparent;
+  border-radius:6px;
+  background:transparent;
+  color:var(--text-subtle);
+  font-size:9px;
+  font-weight:800;
+}
+.chartPeriodTabs button.active {
+  background:#f59e0b;
+  color:#172033;
+}
+.loadingPeriodSelect {
+  display:flex;
+  align-items:center;
+  justify-content:flex-end;
+  gap:8px;
+  margin:0 0 4px;
+  color:var(--text-subtle);
+  font-size:10px;
+  font-weight:700;
+}
+.loadingPeriodSelect select {
+  max-width:190px;
+  min-width:105px;
+  padding:5px 7px;
+  border:1px solid var(--border);
+  border-radius:6px;
+  background:var(--bg-soft);
+  color:var(--text);
+  font-size:10px;
+}
 .panelHead>div {
   min-width:0;
 }
@@ -713,51 +758,6 @@ header {
   text-align:center;
   white-space:nowrap;
 }
-.adminPage {
-  display:flex;
-  flex-direction:column;
-  gap:18px;
-}
-
-.adminHeader {
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap:12px;
-  padding:18px 20px;
-  border:1px solid var(--border);
-  border-radius:16px;
-  background:var(--bg-panel);
-}
-
-.eyebrow {
-  font-size:10px;
-  letter-spacing:.14em;
-  text-transform:uppercase;
-  color:var(--text-subtle);
-  margin-bottom:6px;
-}
-
-.adminHeader h2 {
-  margin:0;
-  font-size:20px;
-  color:var(--text);
-}
-
-.primaryButton,
-.secondaryButton,
-.tableActionButton {
-  border-radius:10px;
-  border:1px solid var(--border);
-  background:var(--primary);
-  color:var(--primary-text);
-  padding:9px 12px;
-  font-size:11px;
-  font-weight:700;
-  cursor:pointer;
-}
-
-.secondaryButton {
 .shiftArchiveNote,.shiftArchiveStatus {
   margin:0;
   color:var(--text-subtle);
@@ -974,6 +974,51 @@ header {
     grid-template-columns:minmax(0, 1fr);
   }
 }
+.adminPage {
+  display:flex;
+  flex-direction:column;
+  gap:18px;
+}
+
+.adminHeader {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  padding:18px 20px;
+  border:1px solid var(--border);
+  border-radius:16px;
+  background:var(--bg-panel);
+}
+
+.eyebrow {
+  font-size:10px;
+  letter-spacing:.14em;
+  text-transform:uppercase;
+  color:var(--text-subtle);
+  margin-bottom:6px;
+}
+
+.adminHeader h2 {
+  margin:0;
+  font-size:20px;
+  color:var(--text);
+}
+
+.primaryButton,
+.secondaryButton,
+.tableActionButton {
+  border-radius:10px;
+  border:1px solid var(--border);
+  background:var(--primary);
+  color:var(--primary-text);
+  padding:9px 12px;
+  font-size:11px;
+  font-weight:700;
+  cursor:pointer;
+}
+
+.secondaryButton {
   background:transparent;
   color:var(--text);
 }
@@ -2251,6 +2296,7 @@ header {
   color: #fbbf24;
   border: 1px solid #f59e0b55;
 }
+
 .emptyState {
   text-align: center;
   color: #64748b !important;

@@ -62,7 +62,7 @@ export const emptyDaily = {
   date: new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Makassar' })).toISOString().slice(0, 10),
   block: '',
   shift: 'Shift 1 (Siang)',
-  pit: areaPitOptions[0],
+  pit: '',
   equipment: [],
   dumpingArea: '',
   blockModel: '',

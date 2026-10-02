@@ -18,9 +18,9 @@ import {
 } from './offlineDB';
 
 import {
+  getConfirmedProductionPendingGroups,
   withProductionRecordIds,
-  readLogsFromGoogleSheets,
-  syncLogsToGoogleSheets,
+  syncProductionAndReadBack,
   syncAttendanceToGoogleSheets,
 } from './googleSheetsService';
 
@@ -72,8 +72,23 @@ async function syncOneItem(item, gsUrl, onProductionSynced) {
         item.id
       );
 
-      await syncLogsToGoogleSheets(gsUrl, productionItems);
-      const remoteLogs = await readLogsFromGoogleSheets(gsUrl).catch(() => null);
+      const { confirmedRecordIds, failedRecords, recordResults, remoteLogs } = await syncProductionAndReadBack(
+        gsUrl,
+        productionItems
+      );
+      const confirmedGroups = getConfirmedProductionPendingGroups(
+        [{ pendingId: item.id, records: productionItems }],
+        recordResults
+      );
+
+      if (!confirmedGroups.length) {
+        console.warn('Production belum terkonfirmasi; queue tetap pending:', {
+          itemId: item.id,
+          failedRecords,
+        });
+        return false;
+      }
+
       if (Array.isArray(remoteLogs)) onProductionSynced?.(remoteLogs);
 
       await deletePendingData(item.id);

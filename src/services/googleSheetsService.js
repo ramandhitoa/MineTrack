@@ -34,6 +34,7 @@ export const GOOGLE_SHEET_NAME = 'Laporan Produksi';
 export const GOOGLE_ATTENDANCE_SHEET_NAME = 'Daily Absensi';
 export const GOOGLE_ORE_GETTING_SHEET_NAME = 'Laporan Ore Getting';
 
+
 export function buildOreGettingPayloadItem(record, fallbackDate) {
   return {
     ...record,
@@ -549,27 +550,25 @@ function saveOreGetting_(payload) {
   }
 
   if (!hasOreGettingHeaders_(sheet)) {
-    return respond_({
-      success: false,
-      message: 'Header Ore Getting harus berurutan dengan Jumlah Sampel di kolom J dan Timestamp Pengumpulan di kolom K.',
-      sheet: ORE_GETTING_SHEET_NAME,
-      count: 0,
-    }, '');
+    throw new Error('Header Laporan Ore Getting harus: Tanggal, Area PIT, Shift, Metode, ID Metode, Acuan, Titik Bor, Block Model, Elevasi, Jumlah Sampel di kolom J dan Timestamp Pengumpulan di kolom K, serta Nama Pelapor di kolom L. Silakan sesuaikan header lembar kerja secara manual sebelum menulis ulang.');
   }
 
   const rows = items.map(function(item) {
     if (Array.isArray(item)) {
-      const row = item.slice(0, 9);
-      while (row.length < 9) row.push('');
-      if (item.length >= 11) {
-        row.push(parseOreGettingSampleCount_(item[9]) ?? '');
-        row.push(item[10] || submittedAt);
-      } else {
-        row.push('');
-        row.push(item[9] || submittedAt);
-      }
-      row.push(item.length >= 12 ? item[11] || '' : '');
-      return row;
+      return [
+        item[0] || '',
+        item[1] || '',
+        item[2] || '',
+        item[3] || '',
+        item[4] || '',
+        item[5] || '',
+        item[6] || '',
+        item[7] || '',
+        item[8] || '',
+        parseOreGettingSampleCount_(item[9]) ?? '',
+        item[10] || submittedAt,
+        item[11] || ''
+      ];
     }
     return oreGettingToRow_(item, submittedAt);
   });
@@ -878,6 +877,9 @@ export async function syncLogsToGoogleSheets(url, logs) {
   }
 
   const identifiedLogs = withProductionRecordIds(logs);
+  if (identifiedLogs.length !== 1) {
+    throw new Error('Production harus disinkronkan satu record per permintaan.');
+  }
 
   try {
     const response = await fetch(endpoint, {
@@ -901,6 +903,15 @@ export async function syncLogsToGoogleSheets(url, logs) {
 
     if (payload && payload.success === false) {
       throw new Error(payload.message || 'Sinkronisasi ke Google Sheets gagal.');
+    }
+
+    if (payload?.success !== true) {
+      throw new Error('Production belum terkonfirmasi tersimpan di Google Sheets. Data tetap disimpan untuk retry.');
+    }
+
+    const acceptedCount = Number(payload.count);
+    if (!Number.isFinite(acceptedCount) || acceptedCount <= 0) {
+      throw new Error('Production belum terkonfirmasi tersimpan di Google Sheets. Data tetap disimpan untuk retry.');
     }
 
     return identifiedLogs;
@@ -1271,6 +1282,63 @@ export function readLogsFromGoogleSheets(url) {
     script.src = endpoint + separator + 'callback=' + encodeURIComponent(callbackName) + '&t=' + Date.now();
     document.head.appendChild(script);
   });
+}
+
+export async function syncProductionAndReadBack(url, logs, readBack = readLogsFromGoogleSheets) {
+  const identifiedLogs = withProductionRecordIds(logs);
+  const syncedLogs = [];
+  const confirmedRecordIds = [];
+  const failedRecords = [];
+  const recordResults = [];
+  let remoteLogs = null;
+
+  for (const record of identifiedLogs) {
+    try {
+      const [syncedRecord] = await syncLogsToGoogleSheets(url, [record]);
+      const readRecords = await readBack(url);
+      if (!Array.isArray(readRecords)) {
+        throw new Error('Google Sheets mengembalikan data Production yang tidak valid.');
+      }
+
+      syncedLogs.push(syncedRecord);
+      confirmedRecordIds.push(record.recordId);
+      recordResults.push({ recordId: record.recordId, confirmed: true });
+      remoteLogs = readRecords;
+    } catch (error) {
+      const readError = String(error?.message || 'Google Sheets tidak dapat mengonfirmasi record.');
+      const message = `Production belum terkonfirmasi tersimpan di Google Sheets. Data tetap disimpan untuk retry. ${readError}`;
+      failedRecords.push({
+        recordId: record.recordId,
+        message,
+      });
+      recordResults.push({ recordId: record.recordId, confirmed: false, message });
+    }
+  }
+
+  return { syncedLogs, confirmedRecordIds, failedRecords, recordResults, remoteLogs };
+}
+
+export function getConfirmedProductionPendingGroups(groups, recordResults) {
+  const confirmedGroups = [];
+  let resultIndex = 0;
+
+  for (const group of groups) {
+    const results = recordResults.slice(resultIndex, resultIndex + group.records.length);
+    resultIndex += group.records.length;
+
+    if (
+      group.pendingId
+      && group.records.length > 0
+      && results.length === group.records.length
+      && group.records.every((record, index) => (
+        results[index].recordId === record.recordId && results[index].confirmed
+      ))
+    ) {
+      confirmedGroups.push(group);
+    }
+  }
+
+  return confirmedGroups;
 }
 
 function parseOreGettingSampleCountValue_(value) {

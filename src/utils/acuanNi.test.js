@@ -12,6 +12,7 @@ import {
   parseAcuanNiValue,
   readAcuanNiFromSpreadsheetRow,
 } from './acuanNi.js';
+import { getProductionDateKey, getRecentProductionLogs } from './dashboardRecentLogs.js';
 import {
   aggregateLoadingMethod,
   aggregateProduction,
@@ -123,25 +124,106 @@ test('Monthly grouping, average keys, and rendering all use getProductionMonthKe
   assert.doesNotMatch(monthlySource, /log\.date\??\.slice\(0, 7\)/);
 });
 
-test('Dashboard displays five recent rows but calculates Ni average from all logs', () => {
-  const logs = Array.from({ length: 100 }, (_, index) => ({
-    niGrade: index < 5 ? 1 : 2,
-    dumpingArea: 'DMP-001',
-  }));
-  const displayedLogs = logs.slice(0, 5);
-  const average = groupAcuanNiAverages(logs, (log) => log.dumpingArea).get('dmp-001');
+test('Dashboard shows all filtered Production records from today and the previous calendar day', () => {
+  const logs = [
+    { id: 'old', date: '2026-09-28' },
+    ...Array.from({ length: 8 }, (_, index) => ({ id: `yesterday-${index}`, date: '29/09/2026' })),
+    ...Array.from({ length: 3 }, (_, index) => ({ id: `today-${index}`, date: '2026-09-30' })),
+  ];
+  const displayedLogs = getRecentProductionLogs(logs, '2026-09-30');
 
-  assert.equal(displayedLogs.length, 5);
-  assertAverage(average, 1.95);
-  assert.match(dashboardSource, /<LogTable logs=\{logs\.slice\(0, 5\)\} averageLogs=\{logs\} \/>/);
+  assert.equal(displayedLogs.length, 11);
+  assert.equal(displayedLogs.some((log) => log.id === 'old'), false);
+  assert.equal(displayedLogs[0].date, '2026-09-30');
+  assert.equal(displayedLogs.at(-1).date, '29/09/2026');
+
+  const nextDayLogs = [
+    { id: 'two-days-old', date: '2026-09-29' },
+    { id: 'yesterday', date: '2026-09-30' },
+    { id: 'today', date: '2026-10-01' },
+  ];
+  assert.deepEqual(
+    getRecentProductionLogs(nextDayLogs, '2026-10-01').map((log) => log.id),
+    ['today', 'yesterday']
+  );
+  assert.deepEqual(
+    getRecentProductionLogs([{ id: 'only-yesterday', date: '2026-09-29' }], '2026-09-30').map((log) => log.id),
+    ['only-yesterday']
+  );
+  assert.equal(getRecentProductionLogs([{ date: '2026-09-28' }], '2026-09-30').length, 0);
+  assert.match(dashboardSource, /getRecentProductionLogs\(filteredLogs, today\)/);
+  assert.match(dashboardSource, /<LogTable logs=\{recentLogs\} averageLogs=\{recentLogs\} \/>/);
+});
+
+test('Dashboard recent table compares date-only values and timestamp dates safely in WITA', () => {
+  assert.equal(getProductionDateKey('2026-09-30'), '2026-09-30');
+  assert.equal(getProductionDateKey('30/09/2026'), '2026-09-30');
+  assert.equal(getProductionDateKey('2026-09-29T16:30:00Z'), '2026-09-30');
+});
+
+test('Dashboard filters data and groups both charts by the selected period', () => {
+  for (const period of ['daily', 'weekly', 'monthly']) {
+    assert.match(dashboardSource, new RegExp(`id: '${period}'`));
+  }
+
+  assert.match(dashboardSource, /Filter PIT/);
+  assert.match(dashboardSource, /Filter Material/);
+  assert.match(dashboardSource, /matchesSearch\(log, keyword\)/);
+  assert.match(dashboardSource, /aggregateProduction\(filteredLogs, productionPeriod\)/);
+  assert.match(dashboardAggregationSource, /group\.rit \+= Number\(log\.ritToday\) \|\| 0/);
+  assert.match(dashboardSource, /aggregateLoadingMethod\(filteredLogs, loadingPeriod, activeLoadingPeriod\)/);
+  assert.match(dashboardAggregationSource, /getPeriodKey\(log\.date, period\) !== selectedPeriod/);
 });
 
 test('Dashboard refresh replaces its dataset even when Google Sheets returns no rows', () => {
   assert.ok((appSource.match(/setLogs\(remoteLogs\)/g) || []).length >= 3);
   assert.doesNotMatch(appSource, /remoteLogs\.length\s*>\s*0\)\s*setLogs\(remoteLogs\)/);
-  assert.match(appSource, /const metrics = useMemo\(\(\) => \{[\s\S]*?\}, \[logs\]\);/);
-  assert.match(appSource, /const chartData = useMemo\(\(\) => \([\s\S]*?\), \[logs\]\);/);
-  assert.match(appSource, /const loadingStats = useMemo\(\(\) => \{[\s\S]*?\}, \[logs\]\);/);
+  assert.match(appSource, /const \[logs, setLogs\] = useState\(clearOldProgressOnce\)/);
+  assert.doesNotMatch(appSource, /useState\([^;]*STORAGE_KEYS\.logs/);
+  assert.match(dashboardSource, /const filteredLogs = useMemo\(\(\) => \{[\s\S]*?return logs\.filter/);
+  assert.match(dashboardSource, /aggregateProduction\(filteredLogs, productionPeriod\)/);
+  assert.match(dashboardSource, /aggregateLoadingMethod\(filteredLogs, loadingPeriod, activeLoadingPeriod\)/);
+  assert.match(dashboardSource, /aggregateProduction\(filteredLogs, productionPeriod\),\s*\[filteredLogs, productionPeriod\]/);
+  assert.match(dashboardSource, /aggregateLoadingMethod\(filteredLogs, loadingPeriod, activeLoadingPeriod\),\s*\[filteredLogs, loadingPeriod, activeLoadingPeriod\]/);
+});
+
+test('Offline Production sync publishes the confirmed Sheets snapshot to Dashboard state', () => {
+  assert.match(offlineSyncSource, /const \{[^}]*remoteLogs[^}]*\} = await syncProductionAndReadBack|const remoteLogs = await readLogsFromGoogleSheets\(gsUrl\)/);
+  assert.match(offlineSyncSource, /if \(Array\.isArray\(remoteLogs\)\) onProductionSynced\?\.\(remoteLogs\)/);
+  assert.match(offlineSyncSource, /syncOneItem\(\s*item,\s*gsUrl,\s*onProductionSynced\s*\)/);
+  assert.match(offlineSyncSource, /await syncPendingData\(\s*gsUrl,\s*onProductionSynced\s*\)/);
+  assert.match(appSource, /startOfflineAutoSync\(gsUrl, \(remoteLogs\) => \{[\s\S]*?setLogs\(remoteLogs\)/);
+});
+
+test('latest Sheets snapshot recalculates all Dashboard periods without deleted or duplicate rows', () => {
+  const oldDataset = [
+    { date: '2026-09-28', ritToday: 3, niGrade: 1, loadingMethod: 'Removed Method' },
+    { date: '2026-09-29', ritToday: 5, niGrade: 1.5, loadingMethod: 'Direct' },
+  ];
+  const latestSheetsResponse = [
+    oldDataset[1],
+    { date: '2026-10-01', ritToday: 2, niGrade: 1.9, loadingMethod: 'Dome' },
+  ];
+  let dashboardLogs = oldDataset;
+
+  dashboardLogs = latestSheetsResponse;
+
+  for (const period of ['daily', 'weekly', 'monthly']) {
+    const production = aggregateProduction(dashboardLogs, period);
+    assert.equal(production.reduce((total, group) => total + group.rit, 0), 7);
+
+    const loading = getLoadingPeriods(dashboardLogs, period)
+      .flatMap((selectedPeriod) => aggregateLoadingMethod(dashboardLogs, period, selectedPeriod));
+    assert.equal(loading.reduce((total, item) => total + item.value, 0), dashboardLogs.length);
+    assert.deepEqual(loading.map((item) => item.name).sort(), ['Direct', 'Dome']);
+  }
+
+  dashboardLogs = [];
+  for (const period of ['daily', 'weekly', 'monthly']) {
+    assert.deepEqual(aggregateProduction(dashboardLogs, period), []);
+    assert.deepEqual(getLoadingPeriods(dashboardLogs, period), []);
+    assert.deepEqual(aggregateLoadingMethod(dashboardLogs, period, ''), []);
+  }
 });
 
 test('Apps Script and Sheets template read/write Acuan Ni through the locale-aware parser', () => {

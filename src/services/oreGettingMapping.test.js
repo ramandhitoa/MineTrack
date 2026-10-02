@@ -93,6 +93,8 @@ test('Ore Getting derives reporter from the login session and carries it through
   assert.match(oreGettingSource, /formatReporterName\(authSession\?\.user\?\.name\)/);
   assert.doesNotMatch(oreGettingSource, /Nama Pelapor|namaPelapor/);
 
+  assert.doesNotMatch(readFileSync(new URL('../main.jsx', import.meta.url), 'utf8'), /register\(['\"]\/service-worker\.js['\"]\)/);
+
   const recordStart = oreGettingSource.indexOf('const newRecord = {');
   const recordEnd = oreGettingSource.indexOf('\n    };', recordStart);
   assert.ok(recordStart >= 0 && recordEnd > recordStart);
@@ -165,6 +167,13 @@ test('ID Metode uses the manual sample number and follows the selected method fo
   assert.equal(formatOreGettingMethodId({ areaPit: 'Pit BETA', metode: 'CEK', sampleNumber: '' }), '');
   assert.equal(formatOreGettingMethodId({ areaPit: 'Pit BETA', metode: 'CEK', sampleNumber: 'A1' }), '');
   assert.match(oreGettingSource, /value=\{sampleNumber\}[\s\S]*?setSampleNumber\(event\.target\.value\)/);
+
+  const sampleFieldStart = oreGettingSource.indexOf('<span>Nomor Sampel</span>');
+  const sampleFieldEnd = oreGettingSource.indexOf('</label>', sampleFieldStart);
+  assert.ok(sampleFieldStart >= 0 && sampleFieldEnd > sampleFieldStart, 'Nomor Sampel input block should exist');
+  const sampleFieldBlock = oreGettingSource.slice(sampleFieldStart, sampleFieldEnd + '</label>'.length);
+  assert.doesNotMatch(sampleFieldBlock, /inputMode\s*=/);
+
   assert.match(oreGettingSource, /value=\{idMetode\}\s+readOnly/);
   assert.match(oreGettingSource, /idMetode,/);
   assert.doesNotMatch(oreGettingSource, /nomorSampel:/);

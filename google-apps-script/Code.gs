@@ -2149,112 +2149,68 @@ function saveOreGetting_(
   var sheet =
     getOreGettingSheet_();
 
+  var items = [];
 
-  var items =
-    Array.isArray(
-      payload.items
-    )
-      ? payload.items
-      : Array.isArray(
-          payload.values
-        )
-        ? payload.values
-        : [];
-
+  if (payload && payload.items && Array.isArray(payload.items)) {
+    items = payload.items;
+  } else if (payload && payload.values && Array.isArray(payload.values)) {
+    items = payload.values;
+  }
 
   var submittedAt =
     getSubmissionTimestamp_();
-
 
   if (!items.length) {
 
     return respond_(
       {
         success: true,
-        message:
-          'Tidak ada data Ore Getting baru.',
-        sheet:
-          ORE_GETTING_SHEET_NAME,
+        message: 'Tidak ada data Ore Getting baru.',
+        sheet: ORE_GETTING_SHEET_NAME,
         count: 0
       },
       ''
     );
-
   }
-
 
   if (!hasOreGettingHeaders_(sheet)) {
-    throw new Error('Header Laporan Ore Getting harus: Tanggal, Area PIT, Shift, Metode, ID Metode, Acuan, Titik Bor, Block Model, Elevasi, Jumlah Sampel, Timestamp Pengumpulan');
+    throw new Error('Header Laporan Ore Getting harus: Tanggal, Area PIT, Shift, Metode, ID Metode, Acuan, Titik Bor, Block Model, Elevasi, Jumlah Sampel di kolom J dan Timestamp Pengumpulan di kolom K, serta Nama Pelapor di kolom L. Silakan sesuaikan header lembar kerja secara manual sebelum menulis ulang.');
   }
 
+  var rows = items.map(function(item) {
+    if (Array.isArray(item)) {
+      var row = [
+        item[0] || '',
+        item[1] || '',
+        item[2] || '',
+        item[3] || '',
+        item[4] || '',
+        item[5] || '',
+        item[6] || '',
+        item[7] || '',
+        item[8] || '',
+        parseOreGettingSampleCount_(item[9]) ?? '',
+        submittedAt,
+        item[11] || ''
+      ];
+      return row;
+    }
 
-  var rows =
-    items.map(
-      function(item) {
+    return oreGettingToRow_(item, submittedAt);
+  });
 
-        if (
-          Array.isArray(item)
-        ) {
-
-          var row = [
-            item[0] || '',
-            item[1] || '',
-            item[2] || '',
-            item[3] || '',
-            item[4] || '',
-            item[5] || '',
-            item[6] || '',
-            item[7] || '',
-            item[8] || '',
-            parseOreGettingSampleCount_(item[9]) ?? '',
-            submittedAt,
-            item.length >= 12 ? item[11] || '' : ''
-          ];
-
-
-          return row;
-
-        }
-
-
-        return oreGettingToRow_(
-          item,
-          submittedAt
-        );
-
-      }
-    );
-
-
-  var startRow =
-    sheet.getLastRow() + 1;
-
-
-  sheet
-    .getRange(
-      startRow,
-      1,
-      rows.length,
-      ORE_GETTING_HEADERS.length
-    )
-    .setValues(
-      rows
-    );
-
+  var startRow = sheet.getLastRow() + 1;
+  sheet.getRange(startRow, 1, rows.length, ORE_GETTING_HEADERS.length).setValues(rows);
 
   return respond_(
     {
       success: true,
-      message:
-        'Data Ore Getting berhasil disimpan.',
-      sheet:
-        ORE_GETTING_SHEET_NAME,
-      count:
-        items.length
+      message: 'Data Ore Getting berhasil disimpan.',
+      sheet: ORE_GETTING_SHEET_NAME,
+      count: rows.length
     },
     ''
   );
-
 }
 
 
@@ -2369,6 +2325,7 @@ function getOreGettingSheet_() {
 
 }
 
+
 function ensureOreGettingReporterHeader_(sheet) {
   if (!sheet || sheet.getLastRow() === 0) return;
 
@@ -2399,42 +2356,9 @@ function ensureOreGettingReporterHeader_(sheet) {
 function ensureAttendanceHeaders_(
   sheet
 ) {
+  if (!sheet) return;
 
-  if (!sheet) {
-    return;
-  }
-
-
-  if (
-    sheet.getLastRow() === 0
-  ) {
-
-    sheet
-      .getRange(
-        1,
-        1,
-        1,
-        ATTENDANCE_HEADERS.length
-      )
-      .setValues(
-        [
-          ATTENDANCE_HEADERS
-        ]
-      );
-
-    return;
-  }
-
-
-  var currentHeaders =
-    sheet
-      .getRange(
-        1,
-        1,
-        1,
-        ATTENDANCE_HEADERS.length
-      )
-      .getValues()[0];
+  var currentHeaders = sheet.getRange(1, 1, 1, ATTENDANCE_HEADERS.length).getValues()[0];
 
 
   var expected =

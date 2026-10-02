@@ -6,6 +6,7 @@
 
 import { Field, Modal } from './Common';
 import { areaPitOptions, equipmentOptions } from '../data/initialData';
+import { getShiftPitLabel } from '../utils/oreGetting';
 
 export function DailyModal({ data, setData, onClose, onSave }) {
   const update = (key, value) => setData((current) => ({ ...current, [key]: value }));
@@ -20,7 +21,16 @@ export function DailyModal({ data, setData, onClose, onSave }) {
               <input type="date" value={data.date} onChange={(e) => update('date', e.target.value)} required />
             </Field>
             <Field label="Blok">
-              <select value={data.block || 'A'} onChange={(e) => update('block', e.target.value)}>
+              <select
+                value={data.block}
+                required
+                onInvalid={(e) => e.currentTarget.setCustomValidity('Silahkan pilih BLOK.')}
+                onChange={(e) => {
+                  e.currentTarget.setCustomValidity('');
+                  update('block', e.target.value);
+                }}
+              >
+                <option value="">Silahkan diisi</option>
                 <option value="A">A</option>
                 <option value="B">B</option>
                 <option value="AKP">AKP</option>
@@ -33,8 +43,19 @@ export function DailyModal({ data, setData, onClose, onSave }) {
               </select>
             </Field>
             <Field label="Pit">
-              <select value={data.pit} onChange={(e) => update('pit', e.target.value)}>
-                {areaPitOptions.map((pit) => <option key={pit}>{pit}</option>)}
+              <select
+                value={data.pit}
+                required
+                onInvalid={(e) => e.currentTarget.setCustomValidity('Silahkan pilih PIT.')}
+                onChange={(e) => {
+                  e.currentTarget.setCustomValidity('');
+                  update('pit', e.target.value);
+                }}
+              >
+                <option value="">Silahkan diisi</option>
+                {areaPitOptions.map((pit) => (
+                  <option key={pit} value={pit}>{getShiftPitLabel(pit)}</option>
+                ))}
               </select>
             </Field>
           </div>
@@ -130,9 +151,6 @@ export function DailyModal({ data, setData, onClose, onSave }) {
                 value={data.niGrade ?? ''}
                 onChange={(e) => update('niGrade', e.target.value)}
               />
-            </Field>
-            <Field label="Nama Pelapor">
-              <input value={data.reporterName} onChange={(e) => update('reporterName', e.target.value)} placeholder="Nama pengirim laporan" required />
             </Field>
             <Field label="Timestamp Pengumpulan">
               <div className="readonly">{new Intl.DateTimeFormat('id-ID', { timeZone: 'Asia/Makassar', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date())}</div>
