@@ -14,6 +14,17 @@ function formatReportDate(date) {
   return `${day}/${month}/${year}`;
 }
 
+function formatOreGettingRecord(record) {
+  return [
+    ['ID METODE', record.idMetode],
+    ['Acuan', record.acuan],
+    ['BM', record.blockModel],
+    ['TB', record.titikBor],
+    ['Block Model', record.blockModel],
+    ['Elv', record.elevasi],
+  ].map(([label, value]) => `${label}: ${String(value ?? '').trim() || '-'}`).join(' | ');
+}
+
 export function canDeleteShiftReport(role) {
   return role === 'OWNER' || role === 'APP_ADMIN';
 }
@@ -24,9 +35,7 @@ export function getShiftReportContent(report) {
     const ni = record.niGrade == null || record.niGrade === '' ? '-' : `${record.niGrade}%`;
     return `${name}: ${displayNumber(record.ritToday)} rit, ${displayNumber(record.tonnage)} MT, Ni ${ni}`;
   });
-  const oreGetting = report.oreGetting.map((record) => (
-    `${record.metode || '-'} ${record.idMetode || ''}: Acuan ${record.acuan || '-'}, Titik Bor ${record.titikBor || '-'}, Block Model ${record.blockModel || '-'}, Elevasi ${record.elevasi || '-'}, Sampel ${record.jumlahSampel ?? '-'}`
-  ));
+  const oreGetting = report.oreGetting.map(formatOreGettingRecord);
   const totalTonnage = report.production.reduce((total, record) => total + (Number(record.tonnage) || 0), 0);
   const totalSamples = report.oreGetting.reduce((total, record) => total + (Number(record.jumlahSampel) || 0), 0);
 
@@ -48,61 +57,6 @@ function getWhatsAppValue(value) {
   if (!text || text === '-') return '';
   const numericValue = Number(text.replace(',', '.').replace(/%$/, ''));
   return Number.isFinite(numericValue) && numericValue === 0 ? '' : text;
-}
-
-function getIdMetodeLines(records) {
-  const uniqueIds = new Set();
-  const output = [];
-  const methodGroups = new Map();
-
-  records.forEach((record) => {
-    let id = String(record.idMetode ?? '').trim().replace(/\s+/g, ' ');
-    if (!id) return;
-    while (/^(CEK|PSI|CH|TP|HS)\s+\1\s+/i.test(id)) {
-      id = id.replace(/^(CEK|PSI|CH|TP|HS)\s+/i, '');
-    }
-    if (uniqueIds.has(id.toLocaleLowerCase())) return;
-    uniqueIds.add(id.toLocaleLowerCase());
-
-    const numericMethod = id.match(/^(CH|TP|HS)\s+(.+)$/i);
-    if (numericMethod) {
-      const idMethod = numericMethod[1].toUpperCase();
-      const parts = numericMethod[2].split(',').map((part) => part.trim());
-      const intervals = parts.map((part) => {
-        const match = part.match(/^(\d+)(?:\s*-\s*(\d+))?$/);
-        return match ? { start: Number(match[1]), end: Number(match[2]) || Number(match[1]) } : null;
-      });
-      if (intervals.every(Boolean)) {
-        let group = methodGroups.get(idMethod);
-        if (!group) {
-          group = { method: idMethod, intervals: [] };
-          methodGroups.set(idMethod, group);
-          output.push(group);
-        }
-        group.intervals.push(...intervals);
-        return;
-      }
-    }
-
-    output.push(id);
-  });
-
-  return output.flatMap((item) => {
-    if (typeof item === 'string') return [item];
-    const sorted = item.intervals.sort((left, right) => left.start - right.start || left.end - right.end);
-    const ranges = [];
-    sorted.forEach((interval) => {
-      const previous = ranges[ranges.length - 1];
-      if (previous && interval.start <= previous.end + 1) {
-        previous.end = Math.max(previous.end, interval.end);
-      } else {
-        ranges.push({ ...interval });
-      }
-    });
-    return ranges.map(({ start, end }) => (
-      start === end ? `${item.method} ${start}` : `${item.method} ${start}-${end}`
-    ));
-  });
 }
 
 export function buildShiftReportWhatsAppText(report) {
@@ -136,7 +90,7 @@ export function buildShiftReportWhatsAppText(report) {
   });
 
   lines.push('', 'HASIL PRODUKSI', ...productionLines);
-  const oreGettingIds = getIdMetodeLines(report.oreGetting);
-  lines.push('', 'ORE GETTING', ...oreGettingIds.map((id) => `• ${id}`));
+  const oreGettingLines = report.oreGetting.map(formatOreGettingRecord);
+  lines.push('', 'ORE GETTING', ...oreGettingLines.map((line) => `• ${line}`));
   return lines.join('\n');
 }

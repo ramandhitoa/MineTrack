@@ -77,6 +77,56 @@ test('archive filters only change the displayed report set', () => {
   assert.equal(filterShiftReports(reports, { startDate: '2026-09-29', endDate: '2026-09-30' }).length, 5);
 });
 
+test('Ore Getting display and share text label stored fields in order and preserve value hyphens', () => {
+  const record = {
+    metode: 'CEK',
+    idMetode: 'A1M_CEK_70',
+    acuan: 'TP 1323 (A-C)',
+    titikBor: 'C1 3813',
+    blockModel: '363',
+    elevasi: '56-53',
+    jumlahSampel: 99,
+  };
+  const report = {
+    date: '2026-09-30',
+    shift: 'Shift 1',
+    canonicalPit: 'Pit BETA',
+    production: [{ dumpingArea: 'D-1', niGrade: 1.2, sampleRef: 'S-1', material: 'Saprolit', ritToday: 4 }],
+    oreGetting: [record],
+  };
+  const oreLine = 'ID METODE: A1M_CEK_70 | Acuan: TP 1323 (A-C) | BM: 363 | TB: C1 3813 | Block Model: 363 | Elv: 56-53';
+
+  assert.equal(getShiftReportContent(report).oreGetting[0], oreLine);
+  assert.ok(buildShiftReportWhatsAppText(report).includes(`• ${oreLine}`));
+  assert.doesNotMatch(oreLine, / - /);
+  assert.ok(oreLine.includes('TP 1323 (A-C)'));
+  assert.ok(oreLine.includes('56-53'));
+  assert.ok(buildShiftReportWhatsAppText(report).includes('1. Dumpingan: D-1\n   Acuan Ni: 1.2%\n   Acuan: S-1\n   Material: Saprolit\n   Ritase: 4'));
+  assert.ok(buildShiftReportWhatsAppText({
+    ...report,
+    oreGetting: [{ idMetode: 'A1M_CEK_70', acuan: '   ', blockModel: '', titikBor: 'TB-2', elevasi: ' 56-53 ' }],
+  }).includes('• ID METODE: A1M_CEK_70 | Acuan: - | BM: - | TB: TB-2 | Block Model: - | Elv: 56-53'));
+  assert.ok(buildShiftReportWhatsAppText({
+    ...report,
+    oreGetting: [{ idMetode: 'A1M_CEK_70' }],
+  }).includes('• ID METODE: A1M_CEK_70 | Acuan: - | BM: - | TB: - | Block Model: - | Elv: -'));
+  assert.equal(
+    getShiftReportContent({ ...report, oreGetting: [{ idMetode: 'CH 1' }] }).oreGetting[0],
+    'ID METODE: CH 1 | Acuan: - | BM: - | TB: - | Block Model: - | Elv: -'
+  );
+  assert.equal(
+    getShiftReportContent({
+      ...report,
+      oreGetting: [{ idMetode: 'A1M_CEK_70', acuan: '   ', blockModel: '', titikBor: 'TB-2', elevasi: ' 56-53 ' }],
+    }).oreGetting[0],
+    'ID METODE: A1M_CEK_70 | Acuan: - | BM: - | TB: TB-2 | Block Model: - | Elv: 56-53'
+  );
+  assert.equal(
+    getShiftReportContent({ ...report, oreGetting: [{}] }).oreGetting[0],
+    'ID METODE: - | Acuan: - | BM: - | TB: - | Block Model: - | Elv: -'
+  );
+});
+
 test('report and source identifiers are stable combinations rather than array positions', () => {
   const [first] = buildShiftReports([production[1]], []);
   const [sameReport] = buildShiftReports([production[1]], []);
@@ -139,9 +189,12 @@ test('archive has one visible date-range control and responsive action targets',
   assert.doesNotMatch(pageSource, /Tanggal mulai|Tanggal akhir/);
   assert.match(pageSource, /className="shiftReportActions"/);
   assert.match(layoutStyles, /@media\(max-width:760px\)[\s\S]*?\.shiftReportActions[\s\S]*?grid-template-columns:repeat\(2, minmax\(0, 1fr\)\)/);
+  assert.match(layoutStyles, /\.shiftReportActionButton\s*\{[^}]*min-width:44px[^}]*min-height:44px/);
+  assert.match(layoutStyles, /@media\(max-width:760px\)[\s\S]*?\.shiftReportActionButton\s*\{[^}]*min-width:44px[^}]*min-height:44px/);
   assert.match(layoutStyles, /\.shiftReportActionButton[\s\S]*?min-height:44px/);
   assert.match(layoutStyles, /overflow-wrap:anywhere/);
   assert.match(layoutStyles, /\.shiftReportList\s*\{[\s\S]*?grid-template-columns:repeat\(2, minmax\(0, 1fr\)\)/);
+  assert.match(layoutStyles, /\.shiftReportOreList li\s*\{[\s\S]*?overflow-wrap:anywhere/);
   assert.match(layoutStyles, /@media\(max-width:1100px\)\s*\{\s*\.shiftReportList\s*\{\s*grid-template-columns:minmax\(0, 1fr\)/);
   assert.match(layoutStyles, /\.shiftReport\s*\{[\s\S]*?padding:12px/);
   assert.match(layoutStyles, /@media\(max-width:760px\)[\s\S]*?\.shiftReport\s*\{\s*padding:10px/);
@@ -156,7 +209,18 @@ test('JPG export renders only the selected report using WhatsApp content', async
   const downloads = [];
   const report = buildShiftReports(
     [{ recordId: 'selected-prod', date: '2026-09-30', shift: 'Shift 1', pit: 'Pit BETA', dumpingArea: 'SELECTED-ONLY', niGrade: 1.2, sampleRef: 'A-1', material: 'Saprolit', ritToday: 3, tonnage: 45 }],
-    [{ date: '2026-09-30', shift: 'Shift 1', areaPit: 'Pit BETA', metode: 'CH', idMetode: 'CH 01-10', jumlahSampel: 10 }]
+    [{
+      date: '2026-09-30',
+      shift: 'Shift 1',
+      areaPit: 'Pit BETA',
+      metode: 'CH',
+      idMetode: 'CH 01-10',
+      acuan: 'A-5',
+      titikBor: 'TB-2',
+      blockModel: 'BM-3',
+      elevasi: '215',
+      jumlahSampel: 10,
+    }]
   )[0];
 
   globalThis.document = {
@@ -197,12 +261,37 @@ test('JPG export renders only the selected report using WhatsApp content', async
     assert.ok(canvases.every((canvas) => canvas.texts.includes('HASIL KERJA SHIFT')));
     assert.ok(canvases.every((canvas) => canvas.texts.includes('HASIL PRODUKSI')));
     assert.ok(canvases.every((canvas) => canvas.texts.includes('ORE GETTING')));
-    assert.ok(canvases.every((canvas) => canvas.texts.includes('• CH 1-10')));
+    assert.ok(canvases.every((canvas) => (
+      canvas.texts.join(' ').includes('• ID METODE: CH 01-10 | Acuan: A-5 | BM: BM-3 | TB: TB-2 | Block Model: BM-3 | Elv: 215')
+    )));
     assert.ok(canvases.every((canvas) => canvas.texts.includes('Ritase: 3')));
     assert.ok(canvases.every((canvas) => !canvas.texts.some((text) => text.includes('Tonase:'))));
     assert.ok(canvases.every((canvas) => !canvas.texts.includes('another report')));
     assert.deepEqual(downloads.map((link) => link.download), ['hasil-kerja-shift-2026-09-30-BETA.jpg']);
     assert.ok(downloads.every((link) => link.clicked && link.removed));
+
+    const fallbackCases = [
+      [
+        { idMetode: 'A1M_CEK_70' },
+        'ID METODE: A1M_CEK_70 | Acuan: - | BM: - | TB: - | Block Model: - | Elv: -',
+      ],
+      [
+        { idMetode: 'A1M_CEK_70', acuan: ' ', blockModel: '363', titikBor: '', elevasi: '56-53' },
+        'ID METODE: A1M_CEK_70 | Acuan: - | BM: 363 | TB: - | Block Model: 363 | Elv: 56-53',
+      ],
+    ];
+    for (const [record, expectedLine] of fallbackCases) {
+      const [fallbackReport] = buildShiftReports([], [{
+        date: '2026-09-30',
+        shift: 'Shift 1',
+        areaPit: 'Pit BETA',
+        ...record,
+      }]);
+      const firstCanvasForCase = canvases.length;
+      await downloadShiftReportJpg(fallbackReport);
+      const fallbackCanvasTexts = canvases.slice(firstCanvasForCase).flatMap((canvas) => canvas.texts).join(' ');
+      assert.ok(fallbackCanvasTexts.includes(`• ${expectedLine}`));
+    }
   } finally {
     if (originalDocument === undefined) delete globalThis.document;
     else globalThis.document = originalDocument;
@@ -253,9 +342,11 @@ test('WhatsApp Production includes only requested non-empty, non-zero fields', (
   assert.ok(message.includes('HASIL KERJA SHIFT\nTanggal: 29/09/2026\nShift: Shift 1 (Siang)\nArea PIT: Rantepao Barat'));
   assert.ok(message.includes('1. Dumpingan: RTP_IRA_SJS_226\n   Acuan Ni: 1.21%\n   Acuan: A-12\n   Material: Saprolit\n   Ritase: 16'));
   assert.ok(message.includes('2. Dumpingan: RTP_IRA_SJS_227\n   Acuan Ni: 1.3%\n   Material: Limonit\n   Ritase: 24'));
-  assert.ok(message.includes('• TP 604-606'));
-  assert.ok(message.includes('• CH 2550-2552'));
-  for (const hiddenField of ['DO-NOT-SHARE', 'Acuan: -', 'Ritase: 0', 'Jumlah Sampel', 'Total Tonase']) {
+  for (const idMetode of originalIds) {
+    assert.ok(message.includes(`• ID METODE: ${idMetode} | Acuan: - | BM: - | TB: - | Block Model: - | Elv: -`));
+  }
+  assert.ok(!message.includes('   Acuan: -'));
+  for (const hiddenField of ['DO-NOT-SHARE', 'Ritase: 0', 'Jumlah Sampel', 'Total Tonase']) {
     assert.ok(!message.includes(hiddenField), `WhatsApp should omit ${hiddenField}`);
   }
   assert.deepEqual(report.oreGetting.map((record) => record.idMetode), originalIds);
@@ -278,7 +369,7 @@ test('WhatsApp omits empty and zero report metadata and Production values', () =
   assert.ok(!message.includes('Acuan:'));
 });
 
-test('WhatsApp compacts contiguous TP/CH ranges and preserves gaps, methods, and duplicates', () => {
+test('WhatsApp formats each Ore Getting ID with labels and preserves value ranges', () => {
   const message = buildShiftReportWhatsAppText({
     date: '2026-09-30',
     shift: 'Shift 1',
@@ -293,15 +384,12 @@ test('WhatsApp compacts contiguous TP/CH ranges and preserves gaps, methods, and
     ],
   });
 
-  assert.ok(message.includes('• TP 604-606'));
-  assert.ok(message.includes('• TP 610-611'));
-  assert.ok(message.includes('• CH 2550-2568'));
-  assert.ok(message.includes('• TP 700'));
-  assert.ok(message.includes('• TP 702'));
-  assert.equal((message.match(/• TP 604-606/g) || []).length, 1);
-  assert.equal((message.match(/• CH 2550-2568/g) || []).length, 1);
-  assert.ok(!message.includes('• TP 604\n'));
-  assert.ok(!message.includes('• CH CH'));
+  assert.ok(message.includes('• ID METODE: TP 604-606 | Acuan: - | BM: - | TB: - | Block Model: - | Elv: -'));
+  assert.ok(message.includes('• ID METODE: TP 610 | Acuan: - | BM: - | TB: - | Block Model: - | Elv: -'));
+  assert.ok(message.includes('• ID METODE: TP 700 | Acuan: - | BM: - | TB: - | Block Model: - | Elv: -'));
+  assert.ok(message.includes('• ID METODE: TP 702 | Acuan: - | BM: - | TB: - | Block Model: - | Elv: -'));
+  assert.equal((message.match(/ID METODE: TP 604-606/g) || []).length, 1);
+  assert.ok(message.includes('• ID METODE: CH CH 2550-2568 | Acuan: - | BM: - | TB: - | Block Model: - | Elv: -'));
 });
 
 test('WhatsApp uses only the selected report and image export content stays unchanged', () => {
