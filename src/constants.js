@@ -6,6 +6,7 @@
 import {
   CalendarDays,
   ClipboardList,
+  Files,
   Clock3,
   LayoutDashboard,
   ListChecks,
@@ -18,6 +19,7 @@ export const tabs = [
   ['harian', 'Progres Kerja Harian', ListChecks],
   ['mingguan', 'Progres Mingguan', CalendarDays],
   ['bulanan', 'Progres Bulanan', CalendarDays],
+  ['shift-reports', 'Report Shift', Files],
   ['oregetting', 'Laporan Ore Getting', ClipboardList],
   ['absensi', 'Daily Absensi', UserCheck],
   ['pending', 'Planning Job Pending', Clock3],
@@ -29,6 +31,7 @@ export const pageTitles = {
   harian: 'Progres Pekerjaan Harian (23 Kolom Excel Ready)',
   mingguan: 'Progres & Agregasi Pekerjaan Mingguan',
   bulanan: 'Rekapitulasi Kinerja Bulanan Smelter Spec',
+  'shift-reports': 'Report Shift',
   oregetting: 'Input Laporan Ore Getting',
   absensi: 'Dashboard Daily Absensi',
   pending: 'Planning Job Pending & Operational Backlog',

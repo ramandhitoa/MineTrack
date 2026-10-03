@@ -1021,6 +1021,60 @@ export function readLogsFromGoogleSheets(url) {
   });
 }
 
+export function readOreGettingFromGoogleSheets(url) {
+  const endpoint = normalizeUrl_(url);
+  if (!endpoint) return Promise.reject(new Error('URL Google Apps Script belum diisi.'));
+
+  return new Promise((resolve, reject) => {
+    const callbackName = '__mineTrackOreGetting_' + Date.now() + '_' + Math.random().toString(36).slice(2);
+    const script = document.createElement('script');
+    const timer = window.setTimeout(() => {
+      cleanup();
+      reject(new Error('Timeout saat membaca Ore Getting dari Google Sheets.'));
+    }, 15000);
+
+    function cleanup() {
+      window.clearTimeout(timer);
+      delete window[callbackName];
+      script.remove();
+    }
+
+    window[callbackName] = (payload) => {
+      cleanup();
+      if (!payload || payload.success === false) {
+        reject(new Error(payload?.message || 'Google Sheets mengembalikan error Ore Getting.'));
+        return;
+      }
+
+      const rows = Array.isArray(payload.items) ? payload.items : [];
+      resolve(rows.map((row) => {
+        if (!Array.isArray(row)) return row && typeof row === 'object' ? { ...row } : null;
+        return {
+          date: String(row[0] || ''),
+          areaPit: String(row[1] || ''),
+          shift: String(row[2] || ''),
+          metode: String(row[3] || ''),
+          idMetode: String(row[4] || ''),
+          acuan: String(row[5] || ''),
+          titikBor: String(row[6] || ''),
+          blockModel: String(row[7] || ''),
+          elevasi: String(row[8] || ''),
+          submissionTimestamp: String(row[9] || ''),
+        };
+      }).filter(Boolean));
+    };
+
+    script.onerror = () => {
+      cleanup();
+      reject(new Error('Web App tidak bisa diakses untuk membaca Ore Getting.'));
+    };
+
+    const separator = endpoint.includes('?') ? '&' : '?';
+    script.src = endpoint + separator + 'type=oregetting&callback=' + encodeURIComponent(callbackName) + '&t=' + Date.now();
+    document.head.appendChild(script);
+  });
+}
+
 function normalizeUrl_(url) {
   return String(url || '').trim().replace(/\\s+/g, '');
 }
