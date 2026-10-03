@@ -1375,3 +1375,226 @@ header {
 /* Tombol konfigurasi Google Sheets: simpan URL dan tes koneksi tanpa menghapus data lokal. */
 .urlActions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 .gsStatus{margin-top:8px;font-size:12px}
+
+.shiftArchiveNote,
+.shiftArchiveStatus {
+  margin:0;
+  color:var(--text-subtle);
+  font-size:11px;
+}
+.shiftReportMonth {
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+}
+.shiftReportMonth>h2 {
+  margin:8px 0 0;
+  padding-bottom:7px;
+  border-bottom:1px solid var(--border);
+  font-size:14px;
+  text-transform:capitalize;
+}
+.shiftReportList {
+  display:grid;
+  grid-template-columns:repeat(2, minmax(0, 1fr));
+  gap:10px;
+  min-width:0;
+}
+.shiftReport {
+  display:flex;
+  min-width:0;
+  flex-direction:column;
+  gap:9px;
+  padding:12px;
+}
+.shiftReportMessage {
+  min-width:0;
+}
+.shiftReportMessageHead {
+  padding-bottom:8px;
+  border-bottom:1px solid var(--border);
+}
+.shiftReportMessageHead h3 {
+  margin:0 0 7px;
+  font-size:13px;
+  line-height:1.4;
+  overflow-wrap:anywhere;
+}
+.shiftReportMessageHead p {
+  margin:3px 0;
+  color:var(--text);
+  font-size:11px;
+  line-height:1.5;
+}
+.shiftReportActions {
+  display:flex;
+  min-width:0;
+  flex-wrap:wrap;
+  justify-content:flex-end;
+  gap:6px;
+  padding-top:12px;
+  border-top:1px solid var(--border);
+}
+.shiftReportActionButton {
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:6px;
+  min-width:44px;
+  min-height:44px;
+  padding:7px 10px;
+  border:1px solid var(--button-border);
+  border-radius:7px;
+  background:var(--button-bg);
+  color:var(--button-text);
+  font-size:11px;
+  font-weight:700;
+  white-space:nowrap;
+}
+.shiftReportActionButton:hover {
+  filter:brightness(1.08);
+}
+.shiftReportDelete {
+  border:1px solid #ef444477;
+  background:transparent;
+  color:#f87171;
+}
+.shiftDateRange {
+  position:relative;
+  min-width:250px;
+}
+.shiftDateRange summary {
+  display:flex;
+  min-height:38px;
+  flex-direction:column;
+  gap:4px;
+  padding:7px 9px;
+  border:1px solid #bfd0e6;
+  border-radius:8px;
+  background:#e6ebf2;
+  color:#102a43;
+  cursor:pointer;
+  list-style:none;
+  font-size:10px;
+  font-weight:700;
+}
+.shiftDateRange summary::-webkit-details-marker {
+  display:none;
+}
+.shiftDateRange summary strong {
+  font-size:11px;
+}
+.shiftDateRangePopover {
+  position:absolute;
+  top:calc(100% + 5px);
+  left:0;
+  z-index:20;
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:8px;
+  width:min(390px, calc(100vw - 48px));
+  padding:12px;
+  border:1px solid var(--border);
+  border-radius:8px;
+  background:var(--bg-panel);
+  box-shadow:0 10px 24px #0003;
+}
+.shiftDateRangePopover label {
+  display:flex;
+  min-width:0;
+  flex-direction:column;
+  gap:5px;
+  color:var(--text-subtle);
+  font-size:10px;
+}
+.shiftDateRangePopover input {
+  width:100%;
+  min-width:0;
+  padding:8px;
+  border:1px solid var(--border);
+  border-radius:6px;
+  background:var(--bg-soft);
+  color:var(--text);
+  font-size:11px;
+}
+.shiftReportSection {
+  margin-top:8px;
+  padding-top:7px;
+  border-top:1px solid var(--border);
+}
+.shiftReportSection h4 {
+  margin:0 0 6px;
+  color:var(--text);
+  font-size:10px;
+  font-weight:800;
+}
+.shiftReportProductionItem {
+  padding:4px 0;
+  border-bottom:1px solid var(--border);
+}
+.shiftReportProductionItem:last-child {
+  border-bottom:0;
+}
+.shiftReportProductionItem p {
+  margin:2px 0;
+  color:var(--text);
+  font-size:11px;
+  line-height:1.4;
+  overflow-wrap:anywhere;
+}
+.shiftReportProductionItem p:first-child {
+  font-weight:700;
+}
+.shiftReportProductionItem p:not(:first-child) {
+  padding-left:16px;
+  color:var(--text-subtle);
+}
+.shiftReportOreList {
+  display:flex;
+  min-width:0;
+  flex-direction:column;
+  gap:3px;
+  margin:0;
+  padding-left:20px;
+  color:var(--text);
+  font-size:11px;
+  line-height:1.4;
+  overflow-wrap:anywhere;
+}
+.shiftReportOreList li {
+  min-width:0;
+  overflow-wrap:anywhere;
+}
+.shiftReportEmptySource {
+  margin:0;
+  color:var(--text-subtle);
+  font-size:11px;
+}
+@media(max-width:1100px) {
+  .shiftReportList {
+    grid-template-columns:minmax(0, 1fr);
+  }
+}
+@media(max-width:760px) {
+  .shiftReportActions {
+    display:grid;
+    grid-template-columns:repeat(2, minmax(0, 1fr));
+    width:100%;
+    justify-content:stretch;
+  }
+  .shiftReportActionButton {
+    min-width:0;
+    padding:8px 6px;
+    font-size:11px;
+  }
+  .shiftReport {
+    padding:10px;
+  }
+  .shiftDateRange {
+    width:100%;
+    min-width:0;
+  }
+  .shiftDateRangePopover {
+    grid-template-columns:minmax(0, 1fr);
+  }
+}
