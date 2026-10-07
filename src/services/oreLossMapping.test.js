@@ -111,6 +111,7 @@ test('Apps Script reads and appends Ore Loss without changing its eleven-column 
     assert.match(source, /function oreLossToRow_\(item, submittedAt\)/);
     assert.match(source, /function getOreLossSheet_\(\)/);
     assert.match(source, /function hasOreLossHeaders_\(sheet\)/);
+    assert.match(source, /function rowToOreLossItem_\(row\)/);
   }
   assert.match(appsScriptSource, /sheet\.getRange\(startRow, 1, rows\.length, ORE_LOSS_HEADERS\.length\)\.setValues\(rows\)/);
   assert.match(appsScriptSource, /function rowToOreLossItem_\(row\)/);
@@ -157,15 +158,21 @@ test('Apps Script reads and appends Ore Loss without changing its eleven-column 
 
 test('Apps Script Ore Loss GET reads the existing tab without creating a sheet', () => {
   let createdSheet = false;
+  const rangeReads = [];
   const values = [
-    GOOGLE_ORE_LOSS_HEADERS,
-    ['EX-01', '07:15', '08:00', '12', 'BM-7', 'TB-2', '210', '3', 'Continue', '2026-10-03 15:20', 'Operator'],
+    [...GOOGLE_ORE_LOSS_HEADERS, 'Keterangan', 'U tidak digunakan'],
+    ['EX-01', '07:15', '08:00', '12', 'BM-7', 'TB-2', '210', '3', 'Continue', '2026-10-03 15:20', 'Operator', '', 'Manual note', 'Must not map'],
   ];
   const sheet = {
     getLastRow: () => values.length,
-    getMaxColumns: () => GOOGLE_ORE_LOSS_HEADERS.length,
-    getRange(row, _column, rowCount) {
-      return { getDisplayValues: () => values.slice(row - 1, row - 1 + rowCount) };
+    getMaxColumns: () => 26,
+    getRange(row, column, rowCount, columnCount) {
+      rangeReads.push({ row, column, rowCount, columnCount });
+      assert.ok(column + columnCount - 1 <= GOOGLE_ORE_LOSS_HEADERS.length, 'READ must stop at official Ore Loss columns');
+      return {
+        getDisplayValues: () => values.slice(row - 1, row - 1 + rowCount)
+          .map((sheetRow) => sheetRow.slice(column - 1, column - 1 + columnCount)),
+      };
     },
   };
   const context = {
@@ -190,6 +197,50 @@ test('Apps Script Ore Loss GET reads the existing tab without creating a sheet',
   assert.equal(createdSheet, false);
   assert.equal(result.count, 1);
   assert.deepEqual(JSON.parse(JSON.stringify(result.items[0])), mapOreLossRow(values[1]));
+  assert.equal(Object.hasOwn(result.items[0], 'recordId'), false);
+  assert.equal(JSON.stringify(result.items[0]).includes('Manual note'), false);
+  assert.equal(JSON.stringify(result.items[0]).includes('Must not map'), false);
+  assert.equal(rangeReads.length, 1);
+});
+
+test('Ore Loss GET returns valid legacy data even when the original header row is absent', () => {
+  const legacyRow = [
+    'EX-02', '08:00', '08:45', '9', 'BM-8', 'TB-3', '205', '2', 'Close',
+    '2026-10-04 08:45', 'Operator Lama', '', 'Manual note', 'Must not map',
+  ];
+  const rangeReads = [];
+  const sheet = {
+    getLastRow: () => 1,
+    getMaxColumns: () => 26,
+    getRange(row, column, rowCount, columnCount) {
+      rangeReads.push({ row, column, rowCount, columnCount });
+      return {
+        getDisplayValues: () => [legacyRow.slice(column - 1, column - 1 + columnCount)],
+      };
+    },
+  };
+  const context = {
+    SpreadsheetApp: {
+      openById: () => ({
+        getSheetByName: () => sheet,
+        insertSheet: () => { throw new Error('READ must not create a sheet'); },
+      }),
+    },
+    ContentService: {
+      MimeType: { JSON: 'application/json', JAVASCRIPT: 'application/javascript' },
+      createTextOutput: (text) => ({ text, setMimeType() { return this; } }),
+    },
+  };
+
+  runInNewContext(appsScriptSource, context);
+  const response = context.doGet({ parameter: { type: 'oreloss' } });
+  const result = JSON.parse(response.text);
+
+  assert.equal(result.success, true);
+  assert.equal(result.count, 1);
+  assert.deepEqual(JSON.parse(JSON.stringify(result.items[0])), mapOreLossRow(legacyRow));
+  assert.equal(Object.hasOwn(result.items[0], 'recordId'), false);
+  assert.ok(rangeReads.every((range) => range.row === 1 && range.column + range.columnCount - 1 <= GOOGLE_ORE_LOSS_HEADERS.length));
 });
 
 test('Ore Loss is routed from the shared sidebar and keeps the reporting form responsive', () => {

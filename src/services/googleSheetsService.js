@@ -74,7 +74,31 @@ export function buildOreLossPayloadItem(record = {}) {
 }
 
 export function mapOreLossRow(row) {
-  if (!Array.isArray(row)) return row && typeof row === 'object' ? { ...row } : null;
+  if (!Array.isArray(row)) {
+    if (!row || typeof row !== 'object') return null;
+    if (
+      ['areaPit', 'metode', 'idMetode', 'jumlahSampel'].some((key) => key in row) &&
+      !['unitExcavator', 'startLoading', 'stopLoading', 'jumlahBucket', 'ritase', 'status']
+        .some((key) => key in row)
+    ) {
+      return null;
+    }
+
+    return {
+      unitExcavator: String(row.unitExcavator || ''),
+      startLoading: String(row.startLoading || ''),
+      stopLoading: String(row.stopLoading || ''),
+      jumlahBucket: Number.isFinite(Number(row.jumlahBucket)) ? Number(row.jumlahBucket) : null,
+      blockModel: String(row.blockModel || ''),
+      titikBor: String(row.titikBor || ''),
+      elevasi: String(row.elevasi || ''),
+      ritase: Number.isFinite(Number(row.ritase)) ? Number(row.ritase) : null,
+      status: String(row.status || ''),
+      submissionTimestamp: String(row.submissionTimestamp || ''),
+      reporterName: String(row.reporterName || ''),
+      ...(row.recordId ? { recordId: String(row.recordId) } : {}),
+    };
+  }
 
   const jumlahBucket = Number(row[3]);
   const ritase = Number(row[7]);
@@ -291,43 +315,59 @@ function doGet(e) {
     }
 
     if (type === 'oregetting' || type === 'ore_getting') {
-      const oreSheet = getOreGettingSheet_();
+      const spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID);
+      const oreSheet = spreadsheet.getSheetByName(ORE_GETTING_SHEET_NAME);
+      if (!oreSheet) {
+        return respond_({ success: true, resource: 'oregetting', items: [], values: [], count: 0 }, getCallback_(e));
+      }
       const lastRow = oreSheet.getLastRow();
-      if (lastRow <= 1) {
-        return respond_({ success: true, items: [], values: [], count: 0 }, getCallback_(e));
+      if (lastRow === 0) {
+        return respond_({ success: true, resource: 'oregetting', items: [], values: [], count: 0 }, getCallback_(e));
       }
 
-      const values = oreSheet.getRange(1, 1, lastRow, Math.max(ORE_GETTING_HEADERS.length, oreSheet.getLastColumn())).getDisplayValues();
-      const sampleCountIndex = values[0].findIndex(header => String(header || '').trim().toLowerCase() === 'jumlah sampel');
-      let timestampIndex = values[0].findIndex(header => String(header || '').trim().toLowerCase() === 'timestamp pengumpulan');
-      const reporterNameIndex = values[0].findIndex(header => String(header || '').trim().toLowerCase() === 'nama pelapor');
+      const readColumnCount = Math.min(ORE_GETTING_HEADERS.length, oreSheet.getMaxColumns());
+      const values = oreSheet.getRange(1, 1, lastRow, readColumnCount).getDisplayValues();
+      const sampleCountIndex = values[0].findIndex((header, index) => (
+        index < ORE_GETTING_HEADERS.length &&
+        String(header || '').trim().toLowerCase() === 'jumlah sampel'
+      ));
+      let timestampIndex = values[0].findIndex((header, index) => (
+        index < ORE_GETTING_HEADERS.length &&
+        String(header || '').trim().toLowerCase() === 'timestamp pengumpulan'
+      ));
+      const reporterNameIndex = values[0].findIndex((header, index) => (
+        index < ORE_GETTING_HEADERS.length &&
+        String(header || '').trim().toLowerCase() === 'nama pelapor'
+      ));
       if (timestampIndex < 0) timestampIndex = 9;
       const dataRows = values.slice(1)
-        .filter(row => row.some(value => String(value).trim() !== ''))
+        .filter(row => row.slice(0, ORE_GETTING_HEADERS.length).some(value => String(value).trim() !== ''))
         .map(row => rowToOreGettingItem_(row, sampleCountIndex, timestampIndex, reporterNameIndex));
-      return respond_({ success: true, items: dataRows, values: dataRows, count: dataRows.length }, getCallback_(e));
+      return respond_({ success: true, resource: 'oregetting', items: dataRows, values: dataRows, count: dataRows.length }, getCallback_(e));
     }
 
     if (type === 'oreloss' || type === 'ore_loss') {
       const spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID);
       const oreLossSheet = spreadsheet.getSheetByName(ORE_LOSS_SHEET_NAME);
       if (!oreLossSheet) {
-        return respond_({ success: true, items: [], values: [], count: 0 }, getCallback_(e));
-      }
-      if (!hasOreLossHeaders_(oreLossSheet)) {
-        throw new Error('Header LAPORAN ORE LOSS tidak sesuai; data lama tidak diubah.');
+        return respond_({ success: true, resource: 'oreloss', items: [], values: [], count: 0 }, getCallback_(e));
       }
 
       const lastRow = oreLossSheet.getLastRow();
-      if (lastRow <= 1) {
-        return respond_({ success: true, items: [], values: [], count: 0 }, getCallback_(e));
+      if (lastRow === 0) {
+        return respond_({ success: true, resource: 'oreloss', items: [], values: [], count: 0 }, getCallback_(e));
       }
 
-      const items = oreLossSheet.getRange(2, 1, lastRow - 1, ORE_LOSS_HEADERS.length)
+      const readColumnCount = Math.min(ORE_LOSS_HEADERS.length, oreLossSheet.getMaxColumns());
+      const values = oreLossSheet.getRange(1, 1, lastRow, readColumnCount)
         .getDisplayValues()
-        .filter(row => row.some(value => String(value || '').trim() !== ''))
-        .map(rowToOreLossItem_);
-      return respond_({ success: true, items, values: items, count: items.length }, getCallback_(e));
+        .filter(row => row.slice(0, ORE_LOSS_HEADERS.length).some(value => String(value || '').trim() !== ''));
+      const startIndex = values.length &&
+        String(values[0][0] || '').trim().toLowerCase() === ORE_LOSS_HEADERS[0].toLowerCase()
+        ? 1
+        : 0;
+      const items = values.slice(startIndex).map(rowToOreLossItem_);
+      return respond_({ success: true, resource: 'oreloss', items, values: items, count: items.length }, getCallback_(e));
     }
 
     if (recordId) {
@@ -335,6 +375,7 @@ function doGet(e) {
       const matchCount = PropertiesService.getScriptProperties().getProperty(key) ? 1 : 0;
       return respond_({
         success: true,
+        resource: 'oreloss',
         found: matchCount > 0,
         matchCount,
         recordId,
@@ -936,8 +977,8 @@ function parseOreGettingSampleCount_(value) {
   if (value === null || value === undefined || value === '') return null;
   if (typeof value === 'number') return Number.isFinite(value) && value >= 0 ? value : null;
 
-  const text = String(value).trim().replace(/\s+/g, '').replace(',', '.');
-  if (!text || !/^(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i.test(text)) return null;
+  const text = String(value).trim().replace(/\\s+/g, '').replace(',', '.');
+  if (!text || !/^(?:\\d+(?:\\.\\d*)?|\\.\\d+)(?:e[+-]?\\d+)?$/i.test(text)) return null;
 
   const count = Number(text);
   return Number.isFinite(count) && count >= 0 ? count : null;
@@ -1010,7 +1051,32 @@ function normalizeMaterial_(value) {
   return normalized;
 }
 
-function rowToOreGettingItem_(row, sampleCountIndex, timestampIndex) {
+function rowToOreGettingItem_(row, sampleCountIndex, timestampIndex, reporterNameIndex) {
+  if (!Array.isArray(row)) {
+    if (!row || typeof row !== 'object') return null;
+    if (
+      ['unitExcavator', 'startLoading', 'stopLoading', 'jumlahBucket', 'ritase', 'status'].some((key) => key in row) &&
+      !['date', 'areaPit', 'metode', 'idMetode', 'jumlahSampel'].some((key) => key in row)
+    ) {
+      return null;
+    }
+    return {
+      date: formatDate_(row.date),
+      areaPit: String(row.areaPit || '').trim(),
+      shift: String(row.shift || '').trim(),
+      metode: String(row.metode || '').trim(),
+      idMetode: String(row.idMetode || '').trim(),
+      acuan: String(row.acuan || '').trim(),
+      titikBor: String(row.titikBor || '').trim(),
+      blockModel: String(row.blockModel || '').trim(),
+      elevasi: String(row.elevasi || '').trim(),
+      jumlahSampel: parseOreGettingSampleCount_(row.jumlahSampel),
+      submissionTimestamp: String(row.submissionTimestamp || '').trim(),
+      reporterName: String(row.reporterName || '').trim(),
+      ...(row.recordId ? { recordId: String(row.recordId) } : {}),
+    };
+  }
+
   return {
     date: formatDate_(row[0]),
     areaPit: String(row[1] || '').trim(),
@@ -1024,6 +1090,22 @@ function rowToOreGettingItem_(row, sampleCountIndex, timestampIndex) {
     jumlahSampel: sampleCountIndex >= 0 ? parseOreGettingSampleCount_(row[sampleCountIndex]) : null,
     submissionTimestamp: String(row[timestampIndex] || '').trim(),
     reporterName: reporterNameIndex >= 0 ? String(row[reporterNameIndex] || '').trim() : ''
+  };
+}
+
+function rowToOreLossItem_(row) {
+  return {
+    unitExcavator: String(row[0] || '').trim(),
+    startLoading: String(row[1] || '').trim(),
+    stopLoading: String(row[2] || '').trim(),
+    jumlahBucket: Number(row[3]),
+    blockModel: String(row[4] || '').trim(),
+    titikBor: String(row[5] || '').trim(),
+    elevasi: String(row[6] || '').trim(),
+    ritase: Number(row[7]),
+    status: String(row[8] || '').trim(),
+    submissionTimestamp: String(row[9] || '').trim(),
+    reporterName: String(row[10] || '').trim()
   };
 }
 
@@ -1666,6 +1748,10 @@ export function readOreGettingFromGoogleSheets(url) {
         reject(new Error(payload?.message || 'Google Sheets mengembalikan error Ore Getting.'));
         return;
       }
+      if (payload.resource && payload.resource !== 'oregetting') {
+        reject(new Error(`Respons GET Ore Getting berasal dari resource ${payload.resource}.`));
+        return;
+      }
 
       const rows = Array.isArray(payload.items) ? payload.items : [];
       resolve(rows.map((row) => {
@@ -1685,9 +1771,8 @@ export function readOreGettingFromGoogleSheets(url) {
             reporterName: String(row[11] || ''),
           };
         }
-
-        return row && typeof row === 'object' ? { ...row } : row;
-      }));
+        return mapOreGettingRow_(row);
+      }).filter(Boolean));
     };
 
     script.onerror = () => {
@@ -1695,8 +1780,7 @@ export function readOreGettingFromGoogleSheets(url) {
       reject(new Error('Web App tidak bisa diakses untuk membaca Ore Getting.'));
     };
 
-    const separator = endpoint.includes('?') ? '&' : '?';
-    script.src = endpoint + separator + 'type=oregetting&callback=' + encodeURIComponent(callbackName) + '&t=' + Date.now();
+    script.src = buildJsonpReadUrl_(endpoint, 'oregetting', callbackName);
     document.head.appendChild(script);
   });
 }
@@ -1725,6 +1809,10 @@ export function readOreLossFromGoogleSheets(url) {
         reject(new Error(payload?.message || 'Google Sheets mengembalikan error Ore Loss.'));
         return;
       }
+      if (payload.resource && payload.resource !== 'oreloss') {
+        reject(new Error(`Respons GET Ore Loss berasal dari resource ${payload.resource}.`));
+        return;
+      }
       const rows = Array.isArray(payload.items) ? payload.items : [];
       resolve(rows.map(mapOreLossRow).filter(Boolean));
     };
@@ -1734,10 +1822,43 @@ export function readOreLossFromGoogleSheets(url) {
       reject(new Error('Web App tidak bisa diakses untuk membaca Ore Loss.'));
     };
 
-    const separator = endpoint.includes('?') ? '&' : '?';
-    script.src = endpoint + separator + 'type=oreloss&callback=' + encodeURIComponent(callbackName) + '&t=' + Date.now();
+    script.src = buildJsonpReadUrl_(endpoint, 'oreloss', callbackName);
     document.head.appendChild(script);
   });
+}
+
+function mapOreGettingRow_(row) {
+  if (!row || typeof row !== 'object') return null;
+  if (
+    ['unitExcavator', 'startLoading', 'stopLoading', 'jumlahBucket', 'ritase', 'status'].some((key) => key in row) &&
+    !['date', 'areaPit', 'metode', 'idMetode', 'jumlahSampel'].some((key) => key in row)
+  ) {
+    return null;
+  }
+
+  return {
+    date: String(row.date || ''),
+    areaPit: String(row.areaPit || ''),
+    shift: String(row.shift || ''),
+    metode: String(row.metode || ''),
+    idMetode: String(row.idMetode || ''),
+    acuan: String(row.acuan || ''),
+    titikBor: String(row.titikBor || ''),
+    blockModel: String(row.blockModel || ''),
+    elevasi: String(row.elevasi || ''),
+    jumlahSampel: parseOreGettingSampleCountValue_(row.jumlahSampel),
+    submissionTimestamp: String(row.submissionTimestamp || row.createdAt || ''),
+    reporterName: String(row.reporterName || ''),
+    ...(row.recordId ? { recordId: String(row.recordId) } : {}),
+  };
+}
+
+function buildJsonpReadUrl_(endpoint, type, callbackName) {
+  const requestUrl = new URL(endpoint);
+  requestUrl.searchParams.set('type', type);
+  requestUrl.searchParams.set('callback', callbackName);
+  requestUrl.searchParams.set('t', String(Date.now()));
+  return requestUrl.toString();
 }
 
 function normalizeUrl_(url) {

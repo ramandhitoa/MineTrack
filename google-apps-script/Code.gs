@@ -216,18 +216,28 @@ function doGet(e) {
       type === 'ore_getting'
     ) {
 
+      var oreGettingSpreadsheet =
+        SpreadsheetApp.openById(SPREADSHEET_ID);
       var oreSheet =
-        getOreGettingSheet_();
+        oreGettingSpreadsheet.getSheetByName(ORE_GETTING_SHEET_NAME);
+
+      if (!oreSheet) {
+        return respond_(
+          { success: true, resource: 'oregetting', items: [], values: [], count: 0 },
+          getCallback_(e)
+        );
+      }
 
       var oreLastRow =
         oreSheet.getLastRow();
 
 
-      if (oreLastRow <= 1) {
+      if (oreLastRow === 0) {
 
         return respond_(
           {
             success: true,
+            resource: 'oregetting',
             items: [],
             values: [],
             count: 0
@@ -237,12 +247,8 @@ function doGet(e) {
       }
 
 
-      var oreLastColumn =
-        Math.max(
-          ORE_GETTING_HEADERS.length,
-          oreSheet.getLastColumn()
-        );
-
+      var oreReadColumnCount =
+        Math.min(ORE_GETTING_HEADERS.length, oreSheet.getMaxColumns());
 
       var oreValues =
         oreSheet
@@ -250,17 +256,20 @@ function doGet(e) {
             1,
             1,
             oreLastRow,
-            oreLastColumn
+            oreReadColumnCount
           )
           .getDisplayValues();
 
-      var oreSampleCountIndex = oreValues[0].findIndex(function(header) {
+      var oreSampleCountIndex = oreValues[0].findIndex(function(header, index) {
+        if (index >= ORE_GETTING_HEADERS.length) return false;
         return String(header || '').trim().toLowerCase() === 'jumlah sampel';
       });
-      var oreTimestampIndex = oreValues[0].findIndex(function(header) {
+      var oreTimestampIndex = oreValues[0].findIndex(function(header, index) {
+        if (index >= ORE_GETTING_HEADERS.length) return false;
         return String(header || '').trim().toLowerCase() === 'timestamp pengumpulan';
       });
-      var oreReporterNameIndex = oreValues[0].findIndex(function(header) {
+      var oreReporterNameIndex = oreValues[0].findIndex(function(header, index) {
+        if (index >= ORE_GETTING_HEADERS.length) return false;
         return String(header || '').trim().toLowerCase() === 'nama pelapor';
       });
       if (oreTimestampIndex < 0) oreTimestampIndex = 9;
@@ -270,8 +279,7 @@ function doGet(e) {
         oreValues
           .slice(1)
           .filter(function(row) {
-
-            return row.some(
+            return row.slice(0, ORE_GETTING_HEADERS.length).some(
               function(value) {
 
                 return String(
@@ -290,6 +298,7 @@ function doGet(e) {
       return respond_(
         {
           success: true,
+          resource: 'oregetting',
           items: oreDataRows,
           values: oreDataRows,
           count: oreDataRows.length
@@ -307,28 +316,33 @@ function doGet(e) {
       var spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID);
       var oreLossSheet = spreadsheet.getSheetByName(ORE_LOSS_SHEET_NAME);
       if (!oreLossSheet) {
-        return respond_({ success: true, items: [], values: [], count: 0 }, getCallback_(e));
-      }
-
-      if (!hasOreLossHeaders_(oreLossSheet)) {
-        throw new Error('Header LAPORAN ORE LOSS tidak sesuai; data lama tidak diubah.');
+        return respond_({ success: true, resource: 'oreloss', items: [], values: [], count: 0 }, getCallback_(e));
       }
 
       var oreLossLastRow = oreLossSheet.getLastRow();
-      if (oreLossLastRow <= 1) {
-        return respond_({ success: true, items: [], values: [], count: 0 }, getCallback_(e));
+      if (oreLossLastRow === 0) {
+        return respond_({ success: true, resource: 'oreloss', items: [], values: [], count: 0 }, getCallback_(e));
       }
 
-      var oreLossItems = oreLossSheet
-        .getRange(2, 1, oreLossLastRow - 1, ORE_LOSS_HEADERS.length)
+      var oreLossReadColumnCount = Math.min(ORE_LOSS_HEADERS.length, oreLossSheet.getMaxColumns());
+      var oreLossValues = oreLossSheet
+        .getRange(1, 1, oreLossLastRow, oreLossReadColumnCount)
         .getDisplayValues()
         .filter(function(row) {
-          return row.some(function(value) { return String(value || '').trim() !== ''; });
-        })
+          return row.slice(0, ORE_LOSS_HEADERS.length).some(function(value) {
+            return String(value || '').trim() !== '';
+          });
+        });
+      var oreLossStartIndex = oreLossValues.length &&
+        String(oreLossValues[0][0] || '').trim().toLowerCase() === ORE_LOSS_HEADERS[0].toLowerCase()
+        ? 1
+        : 0;
+      var oreLossItems = oreLossValues
+        .slice(oreLossStartIndex)
         .map(rowToOreLossItem_);
 
       return respond_(
-        { success: true, items: oreLossItems, values: oreLossItems, count: oreLossItems.length },
+        { success: true, resource: 'oreloss', items: oreLossItems, values: oreLossItems, count: oreLossItems.length },
         getCallback_(e)
       );
     }

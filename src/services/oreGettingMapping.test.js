@@ -1,10 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { runInNewContext } from 'node:vm';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { formatOreGettingMethodId, getOreGettingAreaLabel } from '../utils/oreGetting.js';
-import { buildOreGettingPayloadItem } from './googleSheetsService.js';
+import { buildOreGettingPayloadItem, GOOGLE_APPS_SCRIPT } from './googleSheetsService.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const sourceFiles = [
@@ -73,6 +74,68 @@ test('Ore Getting READ maps quantity and timestamp by header and preserves legac
   assert.match(sheetsTemplate, /rowToOreGettingItem_\(row, sampleCountIndex, timestampIndex, reporterNameIndex\)/);
   assert.match(sheetsTemplate, /timestampIndex\s*<\s*0\)\s*timestampIndex\s*=\s*9/);
   assert.match(sheetsTemplate, /row\.length\s*>=\s*11\s*\?\s*10\s*:\s*9/);
+});
+
+test('Ore Getting READ returns legacy rows without creating headers and ignores columns after L', () => {
+  const headers = [...expectedHeaders, '', '', '', '', '', '', '', 'Keterangan', 'U tidak digunakan'];
+  const legacyRow = [
+    '2026-10-06', 'Pit BETA', 'Shift 2', 'CH', 'CH 05', 'Acuan 1',
+    'BH-5', 'BM-9', '120', '2.5', '15:20 WITA', 'Operator Lama',
+    'ignored-M', 'ignored-N', 'ignored-O', 'ignored-P', 'ignored-Q', 'ignored-R',
+    'ignored-S', 'Manual note', 'Must not map',
+  ];
+  const values = [headers, legacyRow];
+
+  for (const source of [sourceFiles[0], GOOGLE_APPS_SCRIPT]) {
+    let attemptedMutation = false;
+    const rangeReads = [];
+    const sheet = {
+      getLastRow: () => values.length,
+      getMaxColumns: () => 26,
+      getRange(row, column, rowCount, columnCount) {
+        rangeReads.push({ row, column, rowCount, columnCount });
+        assert.ok(column + columnCount - 1 <= expectedHeaders.length, 'READ must stop at official Ore Getting column L');
+        return {
+          getDisplayValues: () => values.slice(row - 1, row - 1 + rowCount)
+            .map((sheetRow) => sheetRow.slice(column - 1, column - 1 + columnCount)),
+        };
+      },
+      setValues: () => { attemptedMutation = true; },
+      setValue: () => { attemptedMutation = true; },
+    };
+    const context = {
+      SpreadsheetApp: {
+        openById: () => ({
+          getSheetByName: (name) => {
+            assert.equal(name, 'Laporan Ore Getting');
+            return sheet;
+          },
+          insertSheet: () => { attemptedMutation = true; throw new Error('READ must not create a sheet'); },
+        }),
+      },
+      ContentService: {
+        MimeType: { JSON: 'application/json', JAVASCRIPT: 'application/javascript' },
+        createTextOutput: (text) => ({ text, setMimeType() { return this; } }),
+      },
+    };
+
+    const runnableSource = source.replace(/^export\s+/gm, '');
+    runInNewContext(runnableSource, context);
+    const response = context.doGet({ parameter: { type: 'oregetting' } });
+    const result = JSON.parse(response.text);
+
+    assert.equal(result.success, true);
+    assert.equal(result.count, 1);
+    assert.equal(result.items[0].date, '2026-10-06');
+    assert.equal(result.items[0].jumlahSampel, 2.5);
+    assert.equal(result.items[0].submissionTimestamp, '15:20 WITA');
+    assert.equal(result.items[0].reporterName, 'Operator Lama');
+    assert.equal(Object.hasOwn(result.items[0], 'recordId'), false);
+    assert.equal(JSON.stringify(result.items[0]).includes('Manual note'), false);
+    assert.equal(JSON.stringify(result.items[0]).includes('Must not map'), false);
+    assert.equal(attemptedMutation, false);
+    assert.equal(rangeReads.length, 1);
+  }
 });
 
 test('Code.gs array writer maps item[0..9], appends server timestamp, then reporter in L', () => {
