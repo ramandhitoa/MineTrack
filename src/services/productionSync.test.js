@@ -17,21 +17,31 @@ const initialDataSource = readFileSync(new URL('../data/initialData.js', import.
 const offlineSyncSource = readFileSync(new URL('./offlineSync.js', import.meta.url), 'utf8');
 const serviceSource = readFileSync(new URL('./googleSheetsService.js', import.meta.url), 'utf8');
 
-function createAppsScriptRuntime(source, productionIdHeader = '') {
+function createAppsScriptRuntime(source) {
   const headers = [
     'Tanggal', 'Blok', 'Shift', 'Pit', 'Dumping', 'Sublot', 'Retase', 'Status',
     'Block Model', 'Acuan', 'Titik Bor', 'Elevasi', 'Metode', 'Material',
-    'Alat Berat', 'Tonase', 'Acuan Ni%', 'Nama Pelapor', 'Timestamp Pengumpulan',
+    'Alat Berat', 'Tonase', 'Acuan Ni%', 'Nama Pelapor',
   ];
-  const legacyRow = ['legacy-date', 'legacy-block', 'legacy-shift'];
-  const rows = [headers.concat(Array(7).fill('')), legacyRow.concat(Array(23).fill(''))];
-  rows[0][19] = productionIdHeader;
+  const legacyRow = [
+    '2026-10-06', 'legacy-block', 'Shift 2', 'Pit Alpha', 'Dump 3', 'SL-7', '4',
+    'Aktif', 'BM-12', 'Ni 1.5%', 'BH-9', '120', 'Excavator', 'Saprolit',
+    'EX-01', '75', '1.5%', 'Pelapor Lama',
+  ];
+  const rows = [
+    headers.concat(['', 'Keterangan', 'Kolom U tidak digunakan']),
+    legacyRow.concat(['', 'Catatan manual - jangan ubah', 'Nilai U - jangan baca']),
+  ];
   const properties = {};
+  const rangeAccesses = [];
+  const rangeWrites = [];
   let lockCount = 0;
   const sheet = {
     getLastRow: () => rows.length,
     getMaxColumns: () => 26,
     getRange(startRow, startColumn, rowCount = 1, columnCount = 1) {
+      rangeAccesses.push({ startRow, startColumn, rowCount, columnCount });
+      assert.ok(startColumn + columnCount - 1 <= 18, 'Production may access only A-R');
       return {
         getDisplayValue: () => String(rows[startRow - 1]?.[startColumn - 1] || ''),
         getDisplayValues() {
@@ -45,8 +55,13 @@ function createAppsScriptRuntime(source, productionIdHeader = '') {
           rows[startRow - 1][startColumn - 1] = value;
         },
         setValues(newRows) {
+          rangeWrites.push({ startRow, startColumn, rowCount, columnCount, newRows });
           newRows.forEach((newRow, rowOffset) => {
-            rows[startRow - 1 + rowOffset] = newRow.slice();
+            const targetRow = rows[startRow - 1 + rowOffset] || Array(21).fill('');
+            newRow.forEach((value, columnOffset) => {
+              targetRow[startColumn - 1 + columnOffset] = value;
+            });
+            rows[startRow - 1 + rowOffset] = targetRow;
           });
         },
       };
@@ -70,6 +85,7 @@ function createAppsScriptRuntime(source, productionIdHeader = '') {
     PropertiesService: {
       getScriptProperties: () => ({
         getProperties: () => ({ ...properties }),
+        getProperty: (key) => properties[key] || null,
         setProperties: (values) => Object.assign(properties, values),
       }),
     },
@@ -88,7 +104,10 @@ function createAppsScriptRuntime(source, productionIdHeader = '') {
   return {
     context,
     rows,
+    properties,
     legacyRow: rows[1].slice(),
+    rangeAccesses,
+    rangeWrites,
     get lockCount() { return lockCount; },
   };
 }
@@ -237,11 +256,36 @@ test('more than one matching Sheet row after POST stays pending', async () => {
   });
 });
 
-test('standalone and embedded Apps Script persist IDs, serialize writes, and preserve old rows', () => {
+test('Production READ maps only A-R, ignores T/U, and accepts legacy rows without recordId', () => {
+  for (const source of [appsScriptSource, GOOGLE_APPS_SCRIPT]) {
+    assert.doesNotMatch(source, /\bPRODUCTION_ID_COLUMN\b|\bensureProductionIdColumn_\b/);
+    const runtime = createAppsScriptRuntime(source);
+    const originalRows = runtime.rows.map((row) => row.slice());
+    const response = runtime.context.doGet({ parameter: { type: 'produksi' } });
+    const legacy = response.items[0];
+
+    assert.equal(response.success, true);
+    assert.equal(response.count, 1);
+    assert.equal(legacy.date, '2026-10-06');
+    assert.equal(legacy.block, 'legacy-block');
+    assert.equal(legacy.reporterName, 'Pelapor Lama');
+    assert.equal(Object.hasOwn(legacy, 'recordId'), false);
+    assert.equal(Object.hasOwn(legacy, 'submissionTimestamp'), false);
+    assert.equal(JSON.stringify(legacy).includes('Catatan manual'), false);
+    assert.equal(JSON.stringify(legacy).includes('Nilai U'), false);
+    assert.deepEqual(runtime.rows, originalRows, 'READ must not modify sheet cells');
+    assert.ok(runtime.rangeAccesses.every((range) => range.startColumn + range.columnCount - 1 <= 18));
+    assert.equal(runtime.rows[0][19], 'Keterangan');
+    assert.equal(runtime.rows[0][20], 'Kolom U tidak digunakan');
+  }
+});
+
+test('Production WRITE deduplicates new recordIds outside the Sheet and writes only A-R', () => {
   for (const source of [appsScriptSource, GOOGLE_APPS_SCRIPT]) {
     const runtime = createAppsScriptRuntime(source);
     const first = runtime.context.saveProduction_({ items: production });
     const retry = runtime.context.saveProduction_({ items: production });
+    const accessesBeforeReadback = runtime.rangeAccesses.length;
     const readBack = runtime.context.doGet({
       parameter: { recordId: production[0].recordId },
     });
@@ -250,24 +294,24 @@ test('standalone and embedded Apps Script persist IDs, serialize writes, and pre
     assert.equal(first.count, 1);
     assert.equal(retry.count, 0);
     assert.equal(retry.duplicateCount, 1);
-    assert.equal(runtime.rows[0][19], 'ID Laporan');
-    assert.equal(runtime.rows[2][19], production[0].recordId);
+    assert.equal(runtime.rangeAccesses.length, accessesBeforeReadback, 'ID verification must not access the sheet');
+    assert.deepEqual(Object.keys(runtime.properties), ['production_record_production-test-key']);
+    assert.equal(runtime.rangeWrites.length, 1);
+    assert.equal(runtime.rangeWrites[0].columnCount, 18);
+    assert.equal(runtime.rows[2].length, 21);
+    assert.equal(runtime.rows[2][17], '');
+    assert.equal(runtime.rows[2][19], '');
+    assert.equal(runtime.rows[2][20], '');
+    assert.equal(runtime.rows[0][19], 'Keterangan');
+    assert.equal(runtime.rows[0][20], 'Kolom U tidak digunakan');
+    assert.equal(runtime.rows[1][19], 'Catatan manual - jangan ubah');
+    assert.equal(runtime.rows[1][20], 'Nilai U - jangan baca');
+    assert.equal(JSON.stringify(runtime.rows).includes('ID Laporan'), false);
     assert.deepEqual(runtime.rows[1], runtime.legacyRow);
     assert.equal(readBack.matchCount, 1);
     assert.equal(readBack.recordId, production[0].recordId);
     assert.equal(runtime.lockCount, 2);
-  }
-});
-
-test('Apps Script refuses an occupied Production ID column without modifying existing data', () => {
-  for (const source of [appsScriptSource, GOOGLE_APPS_SCRIPT]) {
-    const runtime = createAppsScriptRuntime(source, 'Existing Header');
-    const before = runtime.rows.map((row) => row.slice());
-    assert.throws(
-      () => runtime.context.saveProduction_({ items: production }),
-      /Kolom ID Production sudah digunakan/
-    );
-    assert.deepEqual(runtime.rows, before);
+    assert.ok(runtime.rangeAccesses.every((range) => range.startColumn + range.columnCount - 1 <= 18));
   }
 });
 

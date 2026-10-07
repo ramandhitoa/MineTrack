@@ -65,10 +65,8 @@ const HEADERS = [
   'Alat Berat',
   'Tonase',
   'Acuan Ni%',
-  'Nama Pelapor',
-  'Timestamp Pengumpulan'
+  'Nama Pelapor'
 ];
-const PRODUCTION_ID_COLUMN = HEADERS.length + 1;
 
 
 // ============================================================
@@ -340,25 +338,9 @@ function doGet(e) {
     // DATA PRODUKSI
     // ========================================================
 
-    var sheet =
-      getSheet_();
-
     if (recordId) {
-      ensureProductionIdColumn_(sheet);
-      var idLastRow = sheet.getLastRow();
-      var idValues = idLastRow > 1
-        ? sheet
-            .getRange(
-              2,
-              PRODUCTION_ID_COLUMN,
-              idLastRow - 1,
-              1
-            )
-            .getDisplayValues()
-        : [];
-      var matchCount = idValues.filter(function(row) {
-        return String(row[0] || '').trim() === recordId;
-      }).length;
+      var idKey = productionIdempotencyKey_(recordId);
+      var matchCount = PropertiesService.getScriptProperties().getProperty(idKey) ? 1 : 0;
 
       return respond_(
         {
@@ -371,15 +353,11 @@ function doGet(e) {
       );
     }
 
+    var sheet =
+      getSheet_();
+
     var lastRow =
       sheet.getLastRow();
-
-    var lastCol =
-      Math.max(
-        sheet.getLastColumn(),
-        HEADERS.length
-      );
-
 
     if (lastRow === 0) {
 
@@ -400,7 +378,7 @@ function doGet(e) {
           1,
           1,
           lastRow,
-          lastCol
+          HEADERS.length
         )
         .getDisplayValues();
 
@@ -2109,7 +2087,6 @@ function saveProduction_(
 
   var sheet =
     getSheet_();
-  ensureProductionIdColumn_(sheet);
 
 
   var items =
@@ -2122,10 +2099,6 @@ function saveProduction_(
         )
         ? payload.values
         : [];
-
-
-  var submittedAt =
-    getSubmissionTimestamp_();
 
 
   if (!items.length) {
@@ -2150,22 +2123,6 @@ function saveProduction_(
 
   var processed =
     properties.getProperties();
-  var existingIds = {};
-  var lastRow = sheet.getLastRow();
-  if (lastRow > 1) {
-    sheet
-      .getRange(
-        2,
-        PRODUCTION_ID_COLUMN,
-        lastRow - 1,
-        1
-      )
-      .getDisplayValues()
-      .forEach(function(row) {
-        var existingId = String(row[0] || '').trim();
-        if (existingId) existingIds[existingId] = true;
-      });
-  }
 
   var rows = [];
   var keysToMark = {};
@@ -2185,22 +2142,20 @@ function saveProduction_(
 
     var key = productionIdempotencyKey_(recordId);
 
-    if (existingIds[recordId] || processed[key] || seenKeys[key]) {
+    if (processed[key] || seenKeys[key]) {
       duplicateCount++;
       return;
     }
 
     seenKeys[key] = true;
     keysToMark[key] = '1';
-    var row = itemToRow_(item, submittedAt);
-    row.push(recordId);
-    rows.push(row);
+    rows.push(itemToRow_(item));
   });
 
   if (rows.length) {
     var startRow = sheet.getLastRow() + 1;
     sheet
-      .getRange(startRow, 1, rows.length, PRODUCTION_ID_COLUMN)
+      .getRange(startRow, 1, rows.length, HEADERS.length)
       .setValues(rows);
     properties.setProperties(keysToMark);
   }
@@ -2465,36 +2420,6 @@ function ensureProductionHeaders_(sheet) {
     throw new Error('Header Production tidak sesuai; data lama tidak diubah.');
   }
 }
-
-function ensureProductionIdColumn_(sheet) {
-  var maxColumns = sheet.getMaxColumns();
-  if (maxColumns < PRODUCTION_ID_COLUMN) {
-    throw new Error('Lembar Production tidak memiliki kolom ID yang aman; data lama tidak diubah.');
-  }
-
-  var header = String(
-    sheet.getRange(1, PRODUCTION_ID_COLUMN).getDisplayValue() || ''
-  ).trim();
-  if (header.toLowerCase() === 'id laporan') return;
-  if (header) {
-    throw new Error('Kolom ID Production sudah digunakan; data lama tidak diubah.');
-  }
-
-  var lastRow = sheet.getLastRow();
-  if (lastRow > 1) {
-    var hasExistingValues = sheet
-      .getRange(2, PRODUCTION_ID_COLUMN, lastRow - 1, 1)
-      .getDisplayValues()
-      .some(function(row) {
-        return String(row[0] || '').trim() !== '';
-      });
-    if (hasExistingValues) {
-      throw new Error('Kolom ID Production berisi data tanpa header; data lama tidak diubah.');
-    }
-  }
-  sheet.getRange(1, PRODUCTION_ID_COLUMN).setValue('ID Laporan');
-}
-
 
 // ============================================================
 // GET SHEET ABSENSI
@@ -2993,8 +2918,7 @@ function looksLikeHeader_(
 // ============================================================
 
 function itemToRow_(
-  item,
-  submittedAt
+  item
 ) {
 
   var ritToday =
@@ -3055,9 +2979,7 @@ function itemToRow_(
 
     item.reporterName ||
       item.reporter ||
-      '',
-
-    submittedAt
+      ''
 
   ];
 
@@ -3179,16 +3101,6 @@ function rowToItem_(
       'gs-' +
       Utilities.getUuid(),
 
-    recordId:
-      String(
-        row[PRODUCTION_ID_COLUMN - 1] || ''
-      ).trim(),
-
-    syncStatus:
-      String(
-        row[PRODUCTION_ID_COLUMN - 1] || ''
-      ).trim() ? 'sent' : undefined,
-
     date:
       formatDate_(
         row[0]
@@ -3299,11 +3211,6 @@ function rowToItem_(
       String(
         row[17] || ''
       ).trim(),
-
-    submissionTimestamp:
-      String(
-        row[18] || ''
-      ).trim()
 
   };
 
