@@ -175,9 +175,9 @@ test('Dashboard filters data and groups both charts by the selected period', () 
   assert.match(dashboardAggregationSource, /getPeriodKey\(log\.date, period\) !== selectedPeriod/);
 });
 
-test('Dashboard refresh replaces its dataset even when Google Sheets returns no rows', () => {
-  assert.ok((appSource.match(/setLogs\(remoteLogs\)/g) || []).length >= 3);
-  assert.doesNotMatch(appSource, /remoteLogs\.length\s*>\s*0\)\s*setLogs\(remoteLogs\)/);
+test('Dashboard refresh preserves unconfirmed Production while replacing confirmed remote data', () => {
+  assert.ok((appSource.match(/setLogs\(preservePendingProductionLogs\(remoteLogs\)\)/g) || []).length >= 3);
+  assert.doesNotMatch(appSource, /remoteLogs\.length\s*>\s*0\)\s*setLogs\(/);
   assert.match(appSource, /const \[logs, setLogs\] = useState\(clearOldProgressOnce\)/);
   assert.doesNotMatch(appSource, /useState\([^;]*STORAGE_KEYS\.logs/);
   assert.match(dashboardSource, /const filteredLogs = useMemo\(\(\) => \{[\s\S]*?return logs\.filter/);
@@ -187,12 +187,12 @@ test('Dashboard refresh replaces its dataset even when Google Sheets returns no 
   assert.match(dashboardSource, /aggregateLoadingMethod\(filteredLogs, loadingPeriod, activeLoadingPeriod\),\s*\[filteredLogs, loadingPeriod, activeLoadingPeriod\]/);
 });
 
-test('Offline Production sync publishes the confirmed Sheets snapshot to Dashboard state', () => {
+test('Offline Production sync publishes the confirmed Sheets snapshot without losing pending records', () => {
   assert.match(offlineSyncSource, /const \{[^}]*remoteLogs[^}]*\} = await syncProductionAndReadBack|const remoteLogs = await readLogsFromGoogleSheets\(gsUrl\)/);
   assert.match(offlineSyncSource, /if \(Array\.isArray\(remoteLogs\)\) onProductionSynced\?\.\(remoteLogs\)/);
   assert.match(offlineSyncSource, /syncOneItem\(\s*item,\s*gsUrl,\s*onProductionSynced\s*\)/);
   assert.match(offlineSyncSource, /await syncPendingData\(\s*gsUrl,\s*onProductionSynced\s*\)/);
-  assert.match(appSource, /startOfflineAutoSync\(gsUrl, \(remoteLogs\) => \{[\s\S]*?setLogs\(remoteLogs\)/);
+  assert.match(appSource, /startOfflineAutoSync\(gsUrl, \(remoteLogs\) => \{[\s\S]*?setLogs\(preservePendingProductionLogs\(remoteLogs\)\)/);
 });
 
 test('latest Sheets snapshot recalculates all Dashboard periods without deleted or duplicate rows', () => {

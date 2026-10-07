@@ -5,8 +5,8 @@
 // detail UI sudah dipisahkan ke components/pages/services.
 // ============================================================
 
-import { useEffect, useMemo, useState } from 'react';
-import { startOfflineAutoSync } from './services/offlineSync';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { startOfflineAutoSync, syncPendingData } from './services/offlineSync';
 
 import {
   savePendingData,
@@ -29,6 +29,7 @@ import Monthly from './pages/Monthly';
 import Pending from './pages/Pending';
 import Excel from './pages/Excel';
 import OreGetting from './pages/OreGetting';
+import OreLoss from './pages/OreLoss';
 import ShiftReports from './pages/ShiftReports';
 import MasterAkunPage from './components/MasterAkunPage';
 import ManagementUserPage from './components/ManagementUserPage';
@@ -47,7 +48,6 @@ import {
   attendanceKey,
   createProductionRecordId,
   DEFAULT_GOOGLE_APPS_SCRIPT_URL,
-  getConfirmedProductionPendingGroups,
   getUnsyncedAttendanceItems,
   GOOGLE_APPS_SCRIPT,
   GOOGLE_SPREADSHEET_ID,
@@ -55,7 +55,6 @@ import {
   normalizeAttendanceName,
   readAttendanceFromGoogleSheets,
   readLogsFromGoogleSheets,
-  syncProductionAndReadBack,
   syncAttendanceToGoogleSheets,
 } from './services/googleSheetsService';
 
@@ -66,6 +65,26 @@ const readStorage = (key, fallback) => {
     return fallback;
   }
 };
+
+function preservePendingProductionLogs(remoteLogs) {
+  const storedLogs = readStorage(STORAGE_KEYS.logs, []);
+  if (!Array.isArray(storedLogs)) {
+    throw new Error('Riwayat Production lokal tidak valid.');
+  }
+
+  const remoteCounts = new Map();
+  remoteLogs.forEach((log) => {
+    const recordId = String(log?.recordId || '').trim();
+    if (recordId) remoteCounts.set(recordId, (remoteCounts.get(recordId) || 0) + 1);
+  });
+  const pendingLogs = storedLogs.filter((log) => {
+    if (log?.syncStatus !== 'pending') return false;
+    const recordId = String(log.recordId || '').trim();
+    return !recordId || remoteCounts.get(recordId) !== 1;
+  });
+
+  return [...remoteLogs, ...pendingLogs];
+}
 
 const clearOldProgressOnce = () => {
   const resetKey = 'mineTrack_progress_reset_20260910';
@@ -94,6 +113,7 @@ export default function App() {
   const [authSession, setAuthSession] = useState(null);
   const [authError, setAuthError] = useState('');
   const [authLoading, setAuthLoading] = useState(false);
+  const dailySaveInProgressRef = useRef(false);
 
   // -------------------- Data utama aplikasi --------------------
   const [logs, setLogs] = useState(clearOldProgressOnce);
@@ -170,7 +190,7 @@ export default function App() {
     try {
       const remoteLogs = await readLogsFromGoogleSheets(gsUrl);
       setGsRemoteCount(remoteLogs.length);
-      setLogs(remoteLogs);
+      setLogs(preservePendingProductionLogs(remoteLogs));
       setGsStatus(`Terhubung • ${remoteLogs.length} baris`);
       if (showNotification) notify(`Data Google Sheets dimuat: ${remoteLogs.length} baris.`);
       return remoteLogs;
@@ -198,7 +218,7 @@ export default function App() {
         if (cancelled) return;
 
         setGsRemoteCount(remoteLogs.length);
-        setLogs(remoteLogs);
+        setLogs(preservePendingProductionLogs(remoteLogs));
         setGsStatus(`Terhubung • ${remoteLogs.length} baris`);
         notify(`Data Google Sheets berhasil dimuat: ${remoteLogs.length} baris.`);
       })
@@ -254,7 +274,7 @@ export default function App() {
 
     const stopAutoSync = startOfflineAutoSync(gsUrl, (remoteLogs) => {
       if (!Array.isArray(remoteLogs)) return;
-      setLogs(remoteLogs);
+      setLogs(preservePendingProductionLogs(remoteLogs));
       setGsRemoteCount(remoteLogs.length);
     });
 
@@ -406,85 +426,6 @@ export default function App() {
     return Object.entries(summary).map(([name, value]) => ({ name, value }));
   }, [logs]);
 
-  // ============================================================
-  // AUTO SYNC PRODUCTION
-  // Mengirim data Production ke Google Sheets.
-  // Jika berhasil, data yang berasal dari IndexedDB dihapus.
-  // ============================================================
-  const autoSyncProduction = async (
-    itemsToSync,
-    message,
-    offlineIds = []
-  ) => {
-    if (!gsUrl || !itemsToSync || !itemsToSync.length) {
-      return;
-    }
-
-    setGsLoading(true);
-    setGsStatus('Menyinkronkan laporan produksi...');
-
-    try {
-      const confirmedRecordIds = [];
-      const failedRecords = [];
-      let remoteLogs = null;
-
-      for (const [index, record] of itemsToSync.entries()) {
-        let result;
-        try {
-          result = await syncProductionAndReadBack(gsUrl, [record]);
-        } catch (error) {
-          failedRecords.push({
-            recordId: record.recordId || record.id,
-            message: error.message,
-          });
-          continue;
-        }
-
-        confirmedRecordIds.push(...result.confirmedRecordIds);
-        failedRecords.push(...result.failedRecords);
-        if (Array.isArray(result.remoteLogs)) remoteLogs = result.remoteLogs;
-
-        const confirmedGroups = getConfirmedProductionPendingGroups(
-          [{ pendingId: offlineIds[index], records: [record] }],
-          result.recordResults
-        );
-        for (const group of confirmedGroups) {
-          try {
-            await deletePendingData(group.pendingId);
-          } catch (deleteError) {
-            console.warn(
-              'Gagal menghapus data Production dari IndexedDB:',
-              group.pendingId,
-              deleteError
-            );
-          }
-        }
-      }
-
-      if (Array.isArray(remoteLogs)) {
-        setLogs(remoteLogs);
-        setGsRemoteCount(remoteLogs.length);
-      }
-
-      if (failedRecords.length) {
-        setGsStatus(`Gagal • ${failedRecords.length} Production record belum terkonfirmasi`);
-        notify(
-          `${confirmedRecordIds.length} Production record tersinkron; ${failedRecords.length} record tetap pending untuk retry. ${failedRecords[0].message}`
-        );
-      } else {
-        setGsStatus(`Terhubung • ${remoteLogs.length} baris`);
-        notify(message);
-      }
-    } catch (error) {
-      setGsStatus(`Gagal • ${error.message}`);
-      notify(
-        `Data tersimpan di perangkat, tetapi gagal sinkron ke Google Sheets: ${error.message}`
-      );
-    } finally {
-      setGsLoading(false);
-    }
-  };
-
   const autoSyncAttendance = async (
     newAttendanceItems,
     message,
@@ -532,6 +473,7 @@ export default function App() {
   // -------------------- Daily log CRUD --------------------
   const saveDaily = async (event) => {
     event.preventDefault();
+    if (dailySaveInProgressRef.current) return;
 
     const block = String(dailyForm.block ?? '').trim();
     if (!block) {
@@ -567,6 +509,7 @@ export default function App() {
       reporterName,
       id: Date.now(),
       recordId: createProductionRecordId(),
+      syncStatus: 'pending',
       status: dailyForm.status || 'Open',
       block,
       pit,
@@ -580,38 +523,29 @@ export default function App() {
     });
 
     const nextLogs = [newLog, ...logs];
+    localStorage.setItem(STORAGE_KEYS.logs, JSON.stringify(nextLogs));
 
     setLogs(nextLogs);
 setDailyForm({ ...emptyDaily, date: toWitaDateInput() });
 setDailyOpen(false);
 
-// ========================================================
-// SIMPAN DATA BARU KE INDEXEDDB
-// ========================================================
-const offlineData = await savePendingData(
-  'production',
-  newLog
-);
+    dailySaveInProgressRef.current = true;
+    try {
+      await savePendingData('production', newLog);
 
-// ========================================================
-// JIKA ONLINE → LANGSUNG SYNC
-// JIKA OFFLINE → TETAP MENUNGGU DI INDEXEDDB
-// ========================================================
-if (navigator.onLine && gsUrl) {
-  await autoSyncProduction(
-    [newLog],
-    'Laporan produksi berhasil disimpan dan disinkronkan.',
-    [offlineData.id]
-  );
-} else {
-  setGsStatus(
-    'Offline • Data produksi disimpan di perangkat'
-  );
-
-  notify(
-    'Data produksi disimpan di perangkat dan menunggu sinkronisasi.'
-  );
-}
+      if (navigator.onLine && gsUrl) {
+        setGsStatus('Menunggu sinkronisasi Production...');
+        notify('Laporan produksi disimpan dan masuk antrean sinkronisasi.');
+      } else if (!navigator.onLine) {
+        setGsStatus('Offline • Data produksi disimpan di perangkat');
+        notify('Data produksi disimpan di perangkat dan menunggu sinkronisasi.');
+      } else {
+        setGsStatus('Menunggu konfigurasi sinkronisasi');
+        notify('Data produksi disimpan di perangkat dan menunggu URL Google Apps Script.');
+      }
+    } finally {
+      dailySaveInProgressRef.current = false;
+    }
 
   };
 
@@ -756,81 +690,43 @@ const syncGoogleSheets = async () => {
   setGsStatus('Memeriksa data Google Sheets...');
 
   try {
-    const productionQueue = (await getPendingData()).filter((item) => {
-      const type = String(item.type || '').toLowerCase();
-      return type === 'production' || type === 'produksi';
-    });
+    const syncResult = await syncPendingData(
+      gsUrl,
+      (remoteLogs) => {
+        if (!Array.isArray(remoteLogs)) return;
+        setLogs(preservePendingProductionLogs(remoteLogs));
+        setGsRemoteCount(remoteLogs.length);
+      },
+      ['production', 'produksi']
+    );
 
-    const productionGroups = productionQueue.map((item) => {
-      const payloadItems = Array.isArray(item.payload)
-        ? item.payload
-        : [item.payload];
-
-      return {
-        pendingId: item.id,
-        records: payloadItems.map((payload, index) => ({
-          ...payload,
-          recordId: payload?.recordId || payload?.id || `${item.id}-${index}`,
-        })),
-      };
-    });
-    const syncResult = {
-      confirmedRecordIds: [],
-      failedRecords: [],
-      remoteLogs: null,
-    };
-    const pendingDeleteErrors = [];
-
-    for (const group of productionGroups) {
-      let groupResult;
-      try {
-        groupResult = await syncProductionAndReadBack(gsUrl, group.records);
-      } catch (error) {
-        syncResult.failedRecords.push({
-          recordId: group.records[0]?.recordId,
-          message: error.message,
-        });
-        continue;
-      }
-
-      syncResult.confirmedRecordIds.push(...groupResult.confirmedRecordIds);
-      syncResult.failedRecords.push(...groupResult.failedRecords);
-      if (Array.isArray(groupResult.remoteLogs)) syncResult.remoteLogs = groupResult.remoteLogs;
-
-      const confirmedGroups = getConfirmedProductionPendingGroups(
-        [group],
-        groupResult.recordResults
-      );
-      for (const confirmedGroup of confirmedGroups) {
-        try {
-          await deletePendingData(confirmedGroup.pendingId);
-        } catch (error) {
-          pendingDeleteErrors.push(error);
-        }
-      }
+    if (syncResult.skipped) {
+      setGsStatus('Sinkronisasi masih berjalan');
+      notify('Sinkronisasi lain sedang berjalan; data pending tidak dikirim ulang.');
+      return;
     }
 
-    const totalRecords = productionGroups.reduce((count, group) => count + group.records.length, 0);
-    const remoteLogs = totalRecords
-      ? syncResult.remoteLogs
-      : await readLogsFromGoogleSheets(gsUrl);
+    if (syncResult.offline) {
+      setGsStatus('Offline • Sinkronisasi ditunda');
+      notify('Tidak ada koneksi internet. Data Production tetap berada di antrean.');
+      return;
+    }
+
+    const remoteLogs = await readLogsFromGoogleSheets(gsUrl);
 
     if (Array.isArray(remoteLogs)) {
-      setLogs(remoteLogs);
+      setLogs(preservePendingProductionLogs(remoteLogs));
       setGsRemoteCount(remoteLogs.length);
     }
 
-    const failedCount = syncResult.failedRecords.length + pendingDeleteErrors.length;
-    if (failedCount) {
-      setGsStatus(`Gagal • ${failedCount} Production record belum tuntas`);
-      notify(
-        `${syncResult.confirmedRecordIds.length} Production record terkonfirmasi; ${failedCount} record/queue tetap pending.`
-      );
+    if (syncResult.failed) {
+      setGsStatus(`Gagal • ${syncResult.failed} Production queue belum tuntas`);
+      notify(`${syncResult.synced} Production queue tersinkron; ${syncResult.failed} tetap pending.`);
     } else {
       setGsStatus(`Terhubung • ${remoteLogs.length} baris`);
       notify(
-        totalRecords
-          ? `Sinkronisasi Production berhasil: ${totalRecords} record.`
+        syncResult.synced
+          ? `Sinkronisasi Production berhasil: ${syncResult.synced} queue.`
           : 'Tidak ada data Production pending untuk disinkronkan.'
       );
     }
@@ -992,6 +888,7 @@ const syncGoogleSheets = async () => {
         {activeTab === 'shift-reports' && <ShiftReports productionLogs={logs} role={currentRole} />}
 
         {activeTab === 'oregetting' && <OreGetting authSession={authSession} />}
+        {activeTab === 'oreloss' && <OreLoss authSession={authSession} />}
 
         {activeTab === 'absensi' && (
           <DailyAttendance

@@ -25,6 +25,10 @@ function formatOreGettingRecord(record) {
   ].map(([label, value]) => `${label}: ${String(value ?? '').trim() || '-'}`).join(' | ');
 }
 
+function formatProductionValue(value) {
+  return String(value ?? '').trim() || '-';
+}
+
 export function canDeleteShiftReport(role) {
   return role === 'OWNER' || role === 'APP_ADMIN';
 }
@@ -59,6 +63,12 @@ function getWhatsAppValue(value) {
   return Number.isFinite(numericValue) && numericValue === 0 ? '' : text;
 }
 
+function formatProductionFieldValue(label, value) {
+  return label === 'Acuan'
+    ? formatProductionValue(value)
+    : getWhatsAppValue(value) || '-';
+}
+
 export function buildShiftReportWhatsAppText(report) {
   const date = getWhatsAppValue(formatReportDate(report.date));
   const shift = getWhatsAppValue(report.shift);
@@ -79,13 +89,14 @@ export function buildShiftReportWhatsAppText(report) {
       ['Acuan', record.sampleRef],
       ['Material', record.material],
       ['Ritase', record.ritToday],
-    ].filter(([, value]) => getWhatsAppValue(value));
+    ].filter(([label, value]) => label === 'Acuan' || getWhatsAppValue(value));
+    const [firstLabel, firstValue] = fields[0];
 
-    if (!fields.length) return [];
     productionIndex += 1;
     return [
-      `${productionIndex}. ${fields[0][0]}: ${getWhatsAppValue(fields[0][1])}`,
-      ...fields.slice(1).map(([label, value]) => `   ${label}: ${getWhatsAppValue(value)}`),
+      `${productionIndex}. ${firstLabel}: ${formatProductionFieldValue(firstLabel, firstValue)}`,
+      ...fields.slice(1).map(([label, value]) => `   ${label}: ${formatProductionFieldValue(label, value)}`),
+      `   BM: ${formatProductionValue(record.blockModel)} | TB: ${formatProductionValue(record.drillHole)} | Elv: ${formatProductionValue(record.elevation)}`,
     ];
   });
 

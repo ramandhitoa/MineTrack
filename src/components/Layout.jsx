@@ -2,7 +2,6 @@
 // LAYOUT UTAMA
 // Mengatur sidebar, header, notifikasi, dan area konten aplikasi.
 // ============================================================
-
 import {
   BarChart3,
   CalendarDays,
@@ -32,10 +31,8 @@ import {
   cutOffGradeNiStore,
   normalizeCutOffGradeNi,
 } from '../services/cutOffGradeNiService';
-
 function getRoleNavigation(role) {
   const baseNavigation = tabs.map(([id, label]) => [id, label]);
-
   if (role === 'OWNER') {
     return [
       ...baseNavigation,
@@ -44,7 +41,6 @@ function getRoleNavigation(role) {
       ['owner-settings', 'Pengaturan'],
     ];
   }
-
   if (role === 'APP_ADMIN') {
     return [
       ...baseNavigation,
@@ -53,10 +49,8 @@ function getRoleNavigation(role) {
       ['admin-settings', 'Pengaturan'],
     ];
   }
-
   return baseNavigation;
 }
-
 export default function Layout({
   activeTab,
   setActiveTab,
@@ -78,7 +72,6 @@ export default function Layout({
   children,
 }) {
   const currentRole = role || 'USER';
-
   return (
     <div className={`app theme-${theme}`}>
       <Sidebar
@@ -90,7 +83,6 @@ export default function Layout({
         role={currentRole}
         user={user}
       />
-
       <main>
         <Header
           title={title}
@@ -105,7 +97,6 @@ export default function Layout({
           user={user}
           role={currentRole}
         />
-
         <div className="content">
           {alert && (
             <div className="alert">
@@ -122,7 +113,6 @@ export default function Layout({
     </div>
   );
 }
-
 function Sidebar({ activeTab, setActiveTab, mobileNav, setMobileNav, pendingCount, role, user }) {
   const navigation = getRoleNavigation(role);
   const canEditCutoff = canEditCutOffGradeNi(role);
@@ -130,12 +120,10 @@ function Sidebar({ activeTab, setActiveTab, mobileNav, setMobileNav, pendingCoun
   const [cutoffLoading, setCutoffLoading] = useState(true);
   const [cutoffLoadError, setCutoffLoadError] = useState('');
   const canEditLoadedCutoff = canEditCutoff && Boolean(user?.uid) && !cutoffLoading && !cutoffLoadError;
-
   useEffect(() => {
     let active = true;
     setCutoffLoading(true);
     setCutoffLoadError('');
-
     cutOffGradeNiStore.load(getFirestore(firebaseApp))
       .then((savedCutoff) => {
         if (active) dispatchCutoff({ type: 'loaded', value: savedCutoff });
@@ -146,12 +134,10 @@ function Sidebar({ activeTab, setActiveTab, mobileNav, setMobileNav, pendingCoun
       .finally(() => {
         if (active) setCutoffLoading(false);
       });
-
     return () => {
       active = false;
     };
   }, [user?.uid]);
-
   const cutoffInput = (field, label) => (
     <input
       aria-label={label}
@@ -163,7 +149,6 @@ function Sidebar({ activeTab, setActiveTab, mobileNav, setMobileNav, pendingCoun
       onChange={(event) => dispatchCutoff({ type: 'change', field, value: event.target.value })}
     />
   );
-
   const saveCutoff = async () => {
     let values;
     try {
@@ -172,7 +157,6 @@ function Sidebar({ activeTab, setActiveTab, mobileNav, setMobileNav, pendingCoun
       dispatchCutoff({ type: 'save-error', message: error.message });
       return;
     }
-
     dispatchCutoff({ type: 'save-start' });
     try {
       const savedCutoff = await cutOffGradeNiStore.save(
@@ -188,7 +172,6 @@ function Sidebar({ activeTab, setActiveTab, mobileNav, setMobileNav, pendingCoun
       });
     }
   };
-
   return (
     <aside className={mobileNav ? 'sidebar open' : 'sidebar'}>
       <div>
@@ -202,7 +185,6 @@ function Sidebar({ activeTab, setActiveTab, mobileNav, setMobileNav, pendingCoun
             <span>PRODUCTION, ORE GETTING & ABSEN</span>
           </div>
         </div>
-
         <nav>
           {navigation.map(([id, label], index) => {
             const adminMenuIds = ['owner-users', 'owner-master', 'owner-settings', 'admin-users', 'admin-master', 'admin-settings'];
@@ -213,6 +195,7 @@ function Sidebar({ activeTab, setActiveTab, mobileNav, setMobileNav, pendingCoun
               mingguan: 'mingguan',
               bulanan: 'bulanan',
               oregetting: 'oregetting',
+              oreloss: 'oreloss',
               absensi: 'absensi',
               pending: 'pending',
               excel: 'excel',
@@ -223,7 +206,6 @@ function Sidebar({ activeTab, setActiveTab, mobileNav, setMobileNav, pendingCoun
               'admin-master': 'admin-master',
               'admin-settings': 'admin-settings',
             };
-
             const iconMap = {
               dashboard: BarChart3,
               harian: ClipboardList,
@@ -231,6 +213,7 @@ function Sidebar({ activeTab, setActiveTab, mobileNav, setMobileNav, pendingCoun
               bulanan: CalendarDays,
               'shift-reports': ClipboardList,
               oregetting: ClipboardList,
+              oreloss: ClipboardList,
               absensi: UserCheck,
               pending: Clock3,
               excel: Table2,
@@ -241,11 +224,9 @@ function Sidebar({ activeTab, setActiveTab, mobileNav, setMobileNav, pendingCoun
               'admin-master': UserCheck,
               'admin-settings': Settings2,
             };
-
             const Icon = iconMap[id] || Mountain;
             const isOriginalUserSectionBreak = index === 4 && role === 'USER';
             const isAdminSectionBreak = isAdminMenu && index >= tabs.length;
-
             return (
               <div key={id}>
                 {isOriginalUserSectionBreak && <div className="navLabel">QC & Integration Sync</div>}
@@ -267,7 +248,6 @@ function Sidebar({ activeTab, setActiveTab, mobileNav, setMobileNav, pendingCoun
             );
           })}
         </nav>
-
         <div className="spec">
           <div>
             <b>CUT-OFF GRADE Ni</b>
@@ -319,15 +299,12 @@ function Sidebar({ activeTab, setActiveTab, mobileNav, setMobileNav, pendingCoun
           )}
         </div>
       </div>
-
       <footer>GC PIT REPORT v3.0 • QC & Spreadsheet Sync</footer>
     </aside>
   );
 }
-
 function Header({ title, setMobileNav, theme, onThemeChange, onInputDaily, onInputPending, onCopyExcel, onSyncGoogleSheets, onLogout, user, role }) {
   const currentRole = role || 'USER';
-
   return (
     <header>
       <div className="headTitle">
@@ -352,7 +329,6 @@ function Header({ title, setMobileNav, theme, onThemeChange, onInputDaily, onInp
           <MapPin size={12} /> Central & East Mining Pit
         </span>
       </div>
-
       <div className="actions">
         <label className="themeSelector">
           <span>Tema</span>
@@ -361,7 +337,6 @@ function Header({ title, setMobileNav, theme, onThemeChange, onInputDaily, onInp
             <option value="light">Light</option>
           </select>
         </label>
-
         {currentRole === 'USER' && (
           <>
             <button className="primary" onClick={onInputDaily}>
@@ -378,13 +353,11 @@ function Header({ title, setMobileNav, theme, onThemeChange, onInputDaily, onInp
             </button>
           </>
         )}
-
         {currentRole !== 'USER' && (
           <button className="primary" onClick={onInputDaily}>
             <Plus size={14} /> Input Hasil Shift
           </button>
         )}
-
         {onLogout && (
           <button onClick={onLogout}>
             Logout
@@ -394,4 +367,3 @@ function Header({ title, setMobileNav, theme, onThemeChange, onInputDaily, onInp
     </header>
   );
 }
-

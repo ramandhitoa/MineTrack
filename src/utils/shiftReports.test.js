@@ -127,6 +127,47 @@ test('Ore Getting display and share text label stored fields in order and preser
   );
 });
 
+test('Production report displays Acuan, BM, TB and Elv from Production fields with placeholders', () => {
+  const records = [
+    {
+      recordId: 'production-with-details',
+      date: '2026-09-30',
+      shift: 'Shift 1',
+      pit: 'Pit BETA',
+      dumpingArea: 'EFO.B GPE 268',
+      niGrade: 1.26,
+      sampleRef: 'TP 338-339',
+      material: 'Limonit',
+      ritToday: 28,
+      blockModel: '72-73',
+      drillHole: 'F20718',
+      elevation: '152-148',
+    },
+    {
+      recordId: 'production-without-details',
+      date: '2026-09-30',
+      shift: 'Shift 1',
+      pit: 'Pit BETA',
+      dumpingArea: 'EFO.B GPE 269',
+      sampleRef: ' ',
+      blockModel: '',
+      drillHole: null,
+      elevation: '  ',
+    },
+  ];
+  const [report] = buildShiftReports(records, []);
+  const message = buildShiftReportWhatsAppText(report);
+
+  assert.ok(message.includes(
+    '1. Dumpingan: EFO.B GPE 268\n   Acuan Ni: 1.26%\n   Acuan: TP 338-339\n   Material: Limonit\n   Ritase: 28\n   BM: 72-73 | TB: F20718 | Elv: 152-148'
+  ));
+  assert.ok(message.includes(
+    '2. Dumpingan: EFO.B GPE 269\n   Acuan: -\n   BM: - | TB: - | Elv: -'
+  ));
+  assert.ok(message.includes('152-148'));
+  assert.ok(!message.includes('Ore Getting'));
+});
+
 test('report and source identifiers are stable combinations rather than array positions', () => {
   const [first] = buildShiftReports([production[1]], []);
   const [sameReport] = buildShiftReports([production[1]], []);
@@ -208,7 +249,21 @@ test('JPG export renders only the selected report using WhatsApp content', async
   const canvases = [];
   const downloads = [];
   const report = buildShiftReports(
-    [{ recordId: 'selected-prod', date: '2026-09-30', shift: 'Shift 1', pit: 'Pit BETA', dumpingArea: 'SELECTED-ONLY', niGrade: 1.2, sampleRef: 'A-1', material: 'Saprolit', ritToday: 3, tonnage: 45 }],
+    [{
+      recordId: 'selected-prod',
+      date: '2026-09-30',
+      shift: 'Shift 1',
+      pit: 'Pit BETA',
+      dumpingArea: 'SELECTED-ONLY',
+      niGrade: 1.2,
+      sampleRef: 'TP 338-339',
+      material: 'Saprolit',
+      ritToday: 3,
+      tonnage: 45,
+      blockModel: '72-73',
+      drillHole: 'F20718',
+      elevation: '152-148',
+    }],
     [{
       date: '2026-09-30',
       shift: 'Shift 1',
@@ -264,6 +319,10 @@ test('JPG export renders only the selected report using WhatsApp content', async
     assert.ok(canvases.every((canvas) => (
       canvas.texts.join(' ').includes('• ID METODE: CH 01-10 | Acuan: A-5 | BM: BM-3 | TB: TB-2 | Block Model: BM-3 | Elv: 215')
     )));
+    assert.ok(canvases.every((canvas) => (
+      canvas.texts.join(' ').includes('BM: 72-73 | TB: F20718 | Elv: 152-148')
+    )));
+    assert.ok(canvases.every((canvas) => canvas.texts.join(' ').includes('Acuan: TP 338-339')));
     assert.ok(canvases.every((canvas) => canvas.texts.includes('Ritase: 3')));
     assert.ok(canvases.every((canvas) => !canvas.texts.some((text) => text.includes('Tonase:'))));
     assert.ok(canvases.every((canvas) => !canvas.texts.includes('another report')));
@@ -340,13 +399,13 @@ test('WhatsApp Production includes only requested non-empty, non-zero fields', (
   const message = buildShiftReportWhatsAppText(report);
 
   assert.ok(message.includes('HASIL KERJA SHIFT\nTanggal: 29/09/2026\nShift: Shift 1 (Siang)\nArea PIT: Rantepao Barat'));
-  assert.ok(message.includes('1. Dumpingan: RTP_IRA_SJS_226\n   Acuan Ni: 1.21%\n   Acuan: A-12\n   Material: Saprolit\n   Ritase: 16'));
-  assert.ok(message.includes('2. Dumpingan: RTP_IRA_SJS_227\n   Acuan Ni: 1.3%\n   Material: Limonit\n   Ritase: 24'));
+  assert.ok(message.includes('1. Dumpingan: RTP_IRA_SJS_226\n   Acuan Ni: 1.21%\n   Acuan: A-12\n   Material: Saprolit\n   Ritase: 16\n   BM: DO-NOT-SHARE | TB: - | Elv: -'));
+  assert.ok(message.includes('2. Dumpingan: RTP_IRA_SJS_227\n   Acuan Ni: 1.3%\n   Acuan: -\n   Material: Limonit\n   Ritase: 24\n   BM: - | TB: - | Elv: -'));
   for (const idMetode of originalIds) {
     assert.ok(message.includes(`• ID METODE: ${idMetode} | Acuan: - | BM: - | TB: - | Block Model: - | Elv: -`));
   }
-  assert.ok(!message.includes('   Acuan: -'));
-  for (const hiddenField of ['DO-NOT-SHARE', 'Ritase: 0', 'Jumlah Sampel', 'Total Tonase']) {
+  assert.ok(message.includes('   Acuan: -'));
+  for (const hiddenField of ['Ritase: 0', 'Jumlah Sampel', 'Total Tonase']) {
     assert.ok(!message.includes(hiddenField), `WhatsApp should omit ${hiddenField}`);
   }
   assert.deepEqual(report.oreGetting.map((record) => record.idMetode), originalIds);
@@ -366,7 +425,7 @@ test('WhatsApp omits empty and zero report metadata and Production values', () =
   assert.ok(!message.includes('Dumpingan:'));
   assert.ok(!message.includes('Material:'));
   assert.ok(!message.includes('Ritase:'));
-  assert.ok(!message.includes('Acuan:'));
+  assert.ok(message.includes('Acuan: -'));
 });
 
 test('WhatsApp formats each Ore Getting ID with labels and preserves value ranges', () => {

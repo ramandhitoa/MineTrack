@@ -821,7 +821,8 @@ header {
   align-items:center;
   justify-content:center;
   gap:6px;
-  min-height:38px;
+  min-width:44px;
+  min-height:44px;
   padding:7px 10px;
   border:1px solid var(--button-border);
   border-radius:7px;
@@ -940,6 +941,10 @@ header {
   line-height:1.4;
   overflow-wrap:anywhere;
 }
+.shiftReportOreList li {
+  min-width:0;
+  overflow-wrap:anywhere;
+}
 .shiftReportEmptySource {
   margin:0;
   color:var(--text-subtle);
@@ -958,7 +963,7 @@ header {
     justify-content:stretch;
   }
   .shiftReportActionButton {
-    min-width:0;
+    min-width:44px;
     min-height:44px;
     padding:8px 6px;
     font-size:11px;
@@ -2301,6 +2306,86 @@ header {
   text-align: center;
   color: #64748b !important;
   padding: 30px !important;
+}
+
+.oreLossForm {
+  padding:16px;
+}
+.oreLossField {
+  display:grid;
+  align-content:start;
+  gap:7px;
+  min-width:0;
+  color:var(--text-subtle);
+  font-size:12px;
+  font-weight:700;
+}
+.oreLossField input,
+.oreLossField select {
+  width:100%;
+  min-width:0;
+  min-height:44px;
+  padding:10px 12px;
+  border:1px solid var(--border);
+  border-radius:8px;
+  background:var(--bg-soft);
+  color:var(--text);
+  font:inherit;
+  font-weight:500;
+}
+.oreLossField input:focus-visible,
+.oreLossField select:focus-visible {
+  outline:2px solid var(--primary);
+  outline-offset:2px;
+}
+.oreLossActions {
+  grid-column:1 / -1;
+  display:flex;
+  justify-content:flex-end;
+  gap:8px;
+  padding-top:4px;
+}
+.oreLossFeedback {
+  margin:0 16px 16px;
+  padding:10px 12px;
+  border:1px solid var(--border);
+  border-radius:7px;
+  color:var(--text-subtle);
+  font-size:12px;
+}
+.oreLossFeedback.error {
+  border-color:#fb7185;
+  color:#fecdd3;
+}
+.oreLossFeedback.success {
+  border-color:#34d399;
+  color:#a7f3d0;
+}
+.oreLossFeedback.pending {
+  border-color:#64748b;
+}
+.oreLossHistoryStatus {
+  margin:0 16px 12px;
+  color:var(--text-subtle);
+  font-size:12px;
+}
+@media (max-width:640px) {
+  .oreLossForm {
+    padding:14px;
+  }
+  .oreLossActions {
+    display:grid;
+    grid-template-columns:1fr;
+  }
+  .oreLossActions button {
+    width:100%;
+    min-height:44px;
+  }
+  .oreLossFeedback,
+  .oreLossHistoryStatus {
+    margin-left:14px;
+    margin-right:14px;
+  }
 }
 
 /* ============================================================

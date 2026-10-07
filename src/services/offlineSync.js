@@ -13,11 +13,14 @@
 // ============================================================
 
 import {
+  savePendingData,
   getPendingData,
   deletePendingData,
 } from './offlineDB';
+import { STORAGE_KEYS } from '../constants';
 
 import {
+  createProductionRecordId,
   getConfirmedProductionPendingGroups,
   withProductionRecordIds,
   syncProductionAndReadBack,
@@ -30,6 +33,69 @@ import {
 // ------------------------------------------------------------
 
 let isSyncing = false;
+
+function markLocalProductionRecordsSent(recordIds) {
+  const raw = localStorage.getItem(STORAGE_KEYS.logs);
+  if (!raw) {
+    throw new Error('Riwayat Production lokal tidak ditemukan; antrean tetap pending.');
+  }
+
+  const logs = JSON.parse(raw);
+  if (!Array.isArray(logs)) {
+    throw new Error('Riwayat Production lokal tidak valid; antrean tetap pending.');
+  }
+
+  const confirmedIds = new Set(recordIds);
+  const foundIds = new Set();
+  const updatedLogs = logs.map((log) => {
+    const recordId = String(log?.recordId || '').trim();
+    if (!confirmedIds.has(recordId)) return log;
+    foundIds.add(recordId);
+    return { ...log, syncStatus: 'sent' };
+  });
+
+  if (foundIds.size !== confirmedIds.size) {
+    throw new Error('Record Production terverifikasi tidak ditemukan di Local Storage; antrean tetap pending.');
+  }
+  localStorage.setItem(STORAGE_KEYS.logs, JSON.stringify(updatedLogs));
+}
+
+async function recoverPendingProductionFromLocalStorage() {
+  const raw = localStorage.getItem(STORAGE_KEYS.logs);
+  if (!raw) return;
+
+  const logs = JSON.parse(raw);
+  if (!Array.isArray(logs)) {
+    throw new Error('Riwayat Production lokal tidak valid; antrean tetap pending.');
+  }
+
+  let logsChanged = false;
+  for (const log of logs) {
+    if (log?.syncStatus !== 'pending') continue;
+    if (!String(log.recordId || '').trim()) {
+      log.recordId = createProductionRecordId();
+      logsChanged = true;
+    }
+  }
+  if (logsChanged) {
+    localStorage.setItem(STORAGE_KEYS.logs, JSON.stringify(logs));
+  }
+
+  const queuedItems = await getPendingData();
+  const queuedRecordIds = new Set(queuedItems
+    .filter((item) => ['production', 'produksi'].includes(String(item.type || '').toLowerCase()))
+    .map((item) => String(item.payload?.recordId || '').trim())
+    .filter(Boolean));
+
+  for (const log of logs) {
+    if (log?.syncStatus !== 'pending') continue;
+    const recordId = String(log.recordId || '').trim();
+    if (!queuedRecordIds.has(recordId)) {
+      await savePendingData('production', log);
+      queuedRecordIds.add(recordId);
+    }
+  }
+}
 
 
 // ------------------------------------------------------------
@@ -89,6 +155,7 @@ async function syncOneItem(item, gsUrl, onProductionSynced) {
         return false;
       }
 
+      markLocalProductionRecordsSent(confirmedRecordIds);
       if (Array.isArray(remoteLogs)) onProductionSynced?.(remoteLogs);
 
       await deletePendingData(item.id);
@@ -265,7 +332,7 @@ async function syncOneItem(item, gsUrl, onProductionSynced) {
 // SYNC SEMUA DATA PENDING
 // ------------------------------------------------------------
 
-export async function syncPendingData(gsUrl, onProductionSynced) {
+export async function syncPendingData(gsUrl, onProductionSynced, allowedTypes = null) {
 
   // ----------------------------------------------------------
   // JANGAN JALANKAN DUA SYNC BERSAMAAN
@@ -336,8 +403,11 @@ export async function syncPendingData(gsUrl, onProductionSynced) {
     // AMBIL SEMUA DATA PENDING
     // --------------------------------------------------------
 
-    const pendingItems =
-      await getPendingData();
+    await recoverPendingProductionFromLocalStorage();
+    const queuedItems = await getPendingData();
+    const pendingItems = Array.isArray(allowedTypes)
+      ? queuedItems.filter((item) => allowedTypes.includes(String(item.type || '').toLowerCase()))
+      : queuedItems;
 
 
     console.log(

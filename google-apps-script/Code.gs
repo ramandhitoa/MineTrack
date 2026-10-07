@@ -39,6 +39,9 @@ const ATTENDANCE_SHEET_NAME =
 const ORE_GETTING_SHEET_NAME =
   'Laporan Ore Getting';
 
+const ORE_LOSS_SHEET_NAME =
+  'LAPORAN ORE LOSS';
+
 
 // ============================================================
 // HEADER PRODUKSI
@@ -65,6 +68,7 @@ const HEADERS = [
   'Nama Pelapor',
   'Timestamp Pengumpulan'
 ];
+const PRODUCTION_ID_COLUMN = HEADERS.length + 1;
 
 
 // ============================================================
@@ -86,6 +90,19 @@ const ORE_GETTING_HEADERS = [
   'Nama Pelapor'
 ];
 
+const ORE_LOSS_HEADERS = [
+  'Unit Excavator',
+  'Start Loading',
+  'Stop Loading',
+  'Jumlah Bucket',
+  'Block Model',
+  'Titik Bor',
+  'Elevasi',
+  'Ritase',
+  'Status',
+  'Timestamp Pengumpulan',
+  'Nama Pelapor'
+];
 
 // ============================================================
 // HEADER DAILY ABSENSI
@@ -118,6 +135,8 @@ function doGet(e) {
         e.parameter.type || ''
       ).toLowerCase();
     }
+    var recordId =
+      String(e && e.parameter ? e.parameter.recordId || '' : '').trim();
 
 
     // ========================================================
@@ -283,11 +302,74 @@ function doGet(e) {
 
 
     // ========================================================
+    // ORE LOSS
+    // ========================================================
+
+    if (type === 'oreloss' || type === 'ore_loss') {
+      var spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID);
+      var oreLossSheet = spreadsheet.getSheetByName(ORE_LOSS_SHEET_NAME);
+      if (!oreLossSheet) {
+        return respond_({ success: true, items: [], values: [], count: 0 }, getCallback_(e));
+      }
+
+      if (!hasOreLossHeaders_(oreLossSheet)) {
+        throw new Error('Header LAPORAN ORE LOSS tidak sesuai; data lama tidak diubah.');
+      }
+
+      var oreLossLastRow = oreLossSheet.getLastRow();
+      if (oreLossLastRow <= 1) {
+        return respond_({ success: true, items: [], values: [], count: 0 }, getCallback_(e));
+      }
+
+      var oreLossItems = oreLossSheet
+        .getRange(2, 1, oreLossLastRow - 1, ORE_LOSS_HEADERS.length)
+        .getDisplayValues()
+        .filter(function(row) {
+          return row.some(function(value) { return String(value || '').trim() !== ''; });
+        })
+        .map(rowToOreLossItem_);
+
+      return respond_(
+        { success: true, items: oreLossItems, values: oreLossItems, count: oreLossItems.length },
+        getCallback_(e)
+      );
+    }
+
+
+    // ========================================================
     // DATA PRODUKSI
     // ========================================================
 
     var sheet =
       getSheet_();
+
+    if (recordId) {
+      ensureProductionIdColumn_(sheet);
+      var idLastRow = sheet.getLastRow();
+      var idValues = idLastRow > 1
+        ? sheet
+            .getRange(
+              2,
+              PRODUCTION_ID_COLUMN,
+              idLastRow - 1,
+              1
+            )
+            .getDisplayValues()
+        : [];
+      var matchCount = idValues.filter(function(row) {
+        return String(row[0] || '').trim() === recordId;
+      }).length;
+
+      return respond_(
+        {
+          success: true,
+          found: matchCount > 0,
+          matchCount: matchCount,
+          recordId: recordId
+        },
+        getCallback_(e)
+      );
+    }
 
     var lastRow =
       sheet.getLastRow();
@@ -467,6 +549,11 @@ function doPost(e) {
     }
 
 
+    if (type === 'oreloss' || type === 'ore_loss') {
+      return saveOreLoss_(payload);
+    }
+
+
     // ========================================================
     // FORMAT LAMA
     // ========================================================
@@ -483,7 +570,7 @@ function doPost(e) {
 
 
     throw new Error(
-      'Jenis data tidak dikenali. Gunakan type "absensi", "produksi", atau "oregetting".'
+      'Jenis data tidak dikenali. Gunakan type "absensi", "produksi", "oregetting", atau "oreloss".'
     );
 
   } catch (error) {
@@ -2022,6 +2109,7 @@ function saveProduction_(
 
   var sheet =
     getSheet_();
+  ensureProductionIdColumn_(sheet);
 
 
   var items =
@@ -2062,6 +2150,22 @@ function saveProduction_(
 
   var processed =
     properties.getProperties();
+  var existingIds = {};
+  var lastRow = sheet.getLastRow();
+  if (lastRow > 1) {
+    sheet
+      .getRange(
+        2,
+        PRODUCTION_ID_COLUMN,
+        lastRow - 1,
+        1
+      )
+      .getDisplayValues()
+      .forEach(function(row) {
+        var existingId = String(row[0] || '').trim();
+        if (existingId) existingIds[existingId] = true;
+      });
+  }
 
   var rows = [];
   var keysToMark = {};
@@ -2081,20 +2185,22 @@ function saveProduction_(
 
     var key = productionIdempotencyKey_(recordId);
 
-    if (processed[key] || seenKeys[key]) {
+    if (existingIds[recordId] || processed[key] || seenKeys[key]) {
       duplicateCount++;
       return;
     }
 
     seenKeys[key] = true;
     keysToMark[key] = '1';
-    rows.push(itemToRow_(item, submittedAt));
+    var row = itemToRow_(item, submittedAt);
+    row.push(recordId);
+    rows.push(row);
   });
 
   if (rows.length) {
     var startRow = sheet.getLastRow() + 1;
     sheet
-      .getRange(startRow, 1, rows.length, HEADERS.length)
+      .getRange(startRow, 1, rows.length, PRODUCTION_ID_COLUMN)
       .setValues(rows);
     properties.setProperties(keysToMark);
   }
@@ -2214,6 +2320,97 @@ function saveOreGetting_(
 }
 
 
+function saveOreLoss_(payload) {
+  var lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+
+  try {
+    var sheet = getOreLossSheet_();
+    var items = Array.isArray(payload.items)
+      ? payload.items
+      : Array.isArray(payload.values)
+        ? payload.values
+        : [];
+
+    if (!items.length) {
+      return respond_(
+        {
+          success: true,
+          message: 'Tidak ada data Ore Loss baru.',
+          sheet: ORE_LOSS_SHEET_NAME,
+          count: 0
+        },
+        ''
+      );
+    }
+
+    var submittedAt = getSubmissionTimestamp_();
+    var rows = items.map(function(item) {
+      return oreLossToRow_(item, submittedAt);
+    });
+    var startRow = sheet.getLastRow() + 1;
+    sheet.getRange(startRow, 1, rows.length, ORE_LOSS_HEADERS.length).setValues(rows);
+
+    return respond_(
+      {
+        success: true,
+        message: 'Laporan Ore Loss berhasil disimpan.',
+        sheet: ORE_LOSS_SHEET_NAME,
+        count: rows.length
+      },
+      ''
+    );
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+
+function oreLossToRow_(item, submittedAt) {
+  if (!item || typeof item !== 'object' || Array.isArray(item)) {
+    throw new Error('Format data Ore Loss tidak valid.');
+  }
+
+  var unitExcavator = String(item.unitExcavator || '').trim();
+  var startLoading = String(item.startLoading || '').trim();
+  var stopLoading = String(item.stopLoading || '').trim();
+  var jumlahBucket = Number(item.jumlahBucket);
+  var blockModel = String(item.blockModel || '').trim();
+  var titikBor = String(item.titikBor || '').trim();
+  var elevasi = String(item.elevasi || '').trim();
+  var ritase = Number(item.ritase);
+  var status = String(item.status || '').trim();
+  var reporterName = String(item.reporterName || '').trim();
+
+  if (
+    !unitExcavator ||
+    !/^\d{2}:\d{2}$/.test(startLoading) ||
+    !/^\d{2}:\d{2}$/.test(stopLoading) ||
+    !Number.isSafeInteger(jumlahBucket) || jumlahBucket < 0 ||
+    !blockModel || !titikBor || !elevasi ||
+    !Number.isSafeInteger(ritase) || ritase < 0 ||
+    ['Close', 'Continue'].indexOf(status) === -1 ||
+    !reporterName
+  ) {
+    throw new Error('Data Ore Loss tidak lengkap atau tidak valid.');
+  }
+
+  return [
+    unitExcavator,
+    startLoading,
+    stopLoading,
+    jumlahBucket,
+    blockModel,
+    titikBor,
+    elevasi,
+    ritase,
+    status,
+    submittedAt,
+    reporterName
+  ];
+}
+
+
 // ============================================================
 // GET SHEET PRODUKSI
 // ============================================================
@@ -2243,14 +2440,59 @@ function getSheet_() {
   }
 
 
-  ensureHeaders_(
-    sheet,
-    HEADERS
-  );
+  ensureProductionHeaders_(sheet);
 
 
   return sheet;
 
+}
+
+function ensureProductionHeaders_(sheet) {
+  if (sheet.getLastRow() === 0) {
+    sheet
+      .getRange(1, 1, 1, HEADERS.length)
+      .setValues([HEADERS]);
+    return;
+  }
+
+  var current = sheet
+    .getRange(1, 1, 1, HEADERS.length)
+    .getDisplayValues()[0];
+  var matches = HEADERS.every(function(header, index) {
+    return String(current[index] || '').trim().toLowerCase() === header.toLowerCase();
+  });
+  if (!matches) {
+    throw new Error('Header Production tidak sesuai; data lama tidak diubah.');
+  }
+}
+
+function ensureProductionIdColumn_(sheet) {
+  var maxColumns = sheet.getMaxColumns();
+  if (maxColumns < PRODUCTION_ID_COLUMN) {
+    throw new Error('Lembar Production tidak memiliki kolom ID yang aman; data lama tidak diubah.');
+  }
+
+  var header = String(
+    sheet.getRange(1, PRODUCTION_ID_COLUMN).getDisplayValue() || ''
+  ).trim();
+  if (header.toLowerCase() === 'id laporan') return;
+  if (header) {
+    throw new Error('Kolom ID Production sudah digunakan; data lama tidak diubah.');
+  }
+
+  var lastRow = sheet.getLastRow();
+  if (lastRow > 1) {
+    var hasExistingValues = sheet
+      .getRange(2, PRODUCTION_ID_COLUMN, lastRow - 1, 1)
+      .getDisplayValues()
+      .some(function(row) {
+        return String(row[0] || '').trim() !== '';
+      });
+    if (hasExistingValues) {
+      throw new Error('Kolom ID Production berisi data tanpa header; data lama tidak diubah.');
+    }
+  }
+  sheet.getRange(1, PRODUCTION_ID_COLUMN).setValue('ID Laporan');
 }
 
 
@@ -2323,6 +2565,39 @@ function getOreGettingSheet_() {
 
   return sheet;
 
+}
+
+
+function getOreLossSheet_() {
+  var spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID);
+  var sheet = spreadsheet.getSheetByName(ORE_LOSS_SHEET_NAME);
+
+  if (!sheet) {
+    sheet = spreadsheet.insertSheet(ORE_LOSS_SHEET_NAME, spreadsheet.getNumSheets());
+  }
+
+  if (sheet.getLastRow() === 0) {
+    sheet.getRange(1, 1, 1, ORE_LOSS_HEADERS.length).setValues([ORE_LOSS_HEADERS]);
+    return sheet;
+  }
+
+  if (!hasOreLossHeaders_(sheet)) {
+    throw new Error('Header LAPORAN ORE LOSS tidak sesuai; header dan data lama tidak diubah.');
+  }
+
+  return sheet;
+}
+
+
+function hasOreLossHeaders_(sheet) {
+  if (!sheet || sheet.getMaxColumns() < ORE_LOSS_HEADERS.length || sheet.getLastRow() === 0) {
+    return false;
+  }
+
+  var actual = sheet.getRange(1, 1, 1, ORE_LOSS_HEADERS.length).getDisplayValues()[0];
+  return ORE_LOSS_HEADERS.every(function(header, index) {
+    return String(actual[index] || '').trim().toLowerCase() === header.toLowerCase();
+  });
 }
 
 
@@ -2846,6 +3121,22 @@ function oreGettingToRow_(
 
 }
 
+function rowToOreLossItem_(row) {
+  return {
+    unitExcavator: String(row[0] || '').trim(),
+    startLoading: String(row[1] || '').trim(),
+    stopLoading: String(row[2] || '').trim(),
+    jumlahBucket: Number(row[3]),
+    blockModel: String(row[4] || '').trim(),
+    titikBor: String(row[5] || '').trim(),
+    elevasi: String(row[6] || '').trim(),
+    ritase: Number(row[7]),
+    status: String(row[8] || '').trim(),
+    submissionTimestamp: String(row[9] || '').trim(),
+    reporterName: String(row[10] || '').trim()
+  };
+}
+
 function parseOreGettingSampleCount_(value) {
   if (value === null || value === undefined || value === '') return null;
   if (typeof value === 'number') return isFinite(value) && value >= 0 ? value : null;
@@ -2887,6 +3178,16 @@ function rowToItem_(
     id:
       'gs-' +
       Utilities.getUuid(),
+
+    recordId:
+      String(
+        row[PRODUCTION_ID_COLUMN - 1] || ''
+      ).trim(),
+
+    syncStatus:
+      String(
+        row[PRODUCTION_ID_COLUMN - 1] || ''
+      ).trim() ? 'sent' : undefined,
 
     date:
       formatDate_(

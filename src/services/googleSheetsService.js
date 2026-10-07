@@ -33,6 +33,20 @@ export const DEFAULT_GOOGLE_APPS_SCRIPT_URL =
 export const GOOGLE_SHEET_NAME = 'Laporan Produksi';
 export const GOOGLE_ATTENDANCE_SHEET_NAME = 'Daily Absensi';
 export const GOOGLE_ORE_GETTING_SHEET_NAME = 'Laporan Ore Getting';
+export const GOOGLE_ORE_LOSS_SHEET_NAME = 'LAPORAN ORE LOSS';
+export const GOOGLE_ORE_LOSS_HEADERS = [
+  'Unit Excavator',
+  'Start Loading',
+  'Stop Loading',
+  'Jumlah Bucket',
+  'Block Model',
+  'Titik Bor',
+  'Elevasi',
+  'Ritase',
+  'Status',
+  'Timestamp Pengumpulan',
+  'Nama Pelapor',
+];
 
 
 export function buildOreGettingPayloadItem(record, fallbackDate) {
@@ -42,6 +56,60 @@ export function buildOreGettingPayloadItem(record, fallbackDate) {
     submissionTimestamp: record.submissionTimestamp,
     reporterName: String(record.reporterName ?? '').trim(),
   };
+}
+
+export function buildOreLossPayloadItem(record = {}) {
+  return {
+    unitExcavator: String(record.unitExcavator ?? '').trim(),
+    startLoading: String(record.startLoading ?? '').trim(),
+    stopLoading: String(record.stopLoading ?? '').trim(),
+    jumlahBucket: Number(record.jumlahBucket),
+    blockModel: String(record.blockModel ?? '').trim(),
+    titikBor: String(record.titikBor ?? '').trim(),
+    elevasi: String(record.elevasi ?? '').trim(),
+    ritase: Number(record.ritase),
+    status: String(record.status ?? '').trim(),
+    reporterName: String(record.reporterName ?? '').trim(),
+  };
+}
+
+export function mapOreLossRow(row) {
+  if (!Array.isArray(row)) return row && typeof row === 'object' ? { ...row } : null;
+
+  const jumlahBucket = Number(row[3]);
+  const ritase = Number(row[7]);
+  return {
+    unitExcavator: String(row[0] || ''),
+    startLoading: String(row[1] || ''),
+    stopLoading: String(row[2] || ''),
+    jumlahBucket: Number.isFinite(jumlahBucket) ? jumlahBucket : null,
+    blockModel: String(row[4] || ''),
+    titikBor: String(row[5] || ''),
+    elevasi: String(row[6] || ''),
+    ritase: Number.isFinite(ritase) ? ritase : null,
+    status: String(row[8] || ''),
+    submissionTimestamp: String(row[9] || ''),
+    reporterName: String(row[10] || ''),
+  };
+}
+
+export async function syncOreLossToGoogleSheets(url, record) {
+  const endpoint = normalizeUrl_(url);
+  if (!endpoint) throw new Error('URL Google Apps Script belum diisi.');
+
+  const item = buildOreLossPayloadItem(record);
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({ type: 'oreloss', items: [item] }),
+  });
+  const payload = parseJsonResponse_(await response.text());
+
+  if (!response.ok || payload?.success !== true || Number(payload.count) !== 1) {
+    throw new Error(payload?.message || `Laporan Ore Loss gagal disimpan (HTTP ${response.status}).`);
+  }
+
+  return payload;
 }
 
 export function normalizeAttendanceValue(value = '') {
@@ -131,6 +199,7 @@ const SPREADSHEET_ID = '${GOOGLE_SPREADSHEET_ID}';
 const SHEET_NAME = '${GOOGLE_SHEET_NAME}';
 const ATTENDANCE_SHEET_NAME = '${GOOGLE_ATTENDANCE_SHEET_NAME}';
 const ORE_GETTING_SHEET_NAME = '${GOOGLE_ORE_GETTING_SHEET_NAME}';
+const ORE_LOSS_SHEET_NAME = '${GOOGLE_ORE_LOSS_SHEET_NAME}';
 
 const HEADERS = [
   'Tanggal',
@@ -153,6 +222,7 @@ const HEADERS = [
   'Nama Pelapor',
   'Timestamp Pengumpulan'
 ];
+const PRODUCTION_ID_COLUMN = HEADERS.length + 1;
 
 const ORE_GETTING_HEADERS = [
   'Tanggal',
@@ -165,6 +235,20 @@ const ORE_GETTING_HEADERS = [
   'Block Model',
   'Elevasi',
   'Jumlah Sampel',
+  'Timestamp Pengumpulan',
+  'Nama Pelapor'
+];
+
+const ORE_LOSS_HEADERS = [
+  'Unit Excavator',
+  'Start Loading',
+  'Stop Loading',
+  'Jumlah Bucket',
+  'Block Model',
+  'Titik Bor',
+  'Elevasi',
+  'Ritase',
+  'Status',
   'Timestamp Pengumpulan',
   'Nama Pelapor'
 ];
@@ -182,6 +266,7 @@ const ATTENDANCE_HEADERS = [
 function doGet(e) {
   try {
     const type = e && e.parameter ? String(e.parameter.type || '').toLowerCase() : '';
+    const recordId = String(e && e.parameter ? e.parameter.recordId || '' : '').trim();
 
     if (type === 'absensi' || type === 'attendance') {
       const attendanceSheet = getAttendanceSheet_();
@@ -225,7 +310,44 @@ function doGet(e) {
       return respond_({ success: true, items: dataRows, values: dataRows, count: dataRows.length }, getCallback_(e));
     }
 
+    if (type === 'oreloss' || type === 'ore_loss') {
+      const spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID);
+      const oreLossSheet = spreadsheet.getSheetByName(ORE_LOSS_SHEET_NAME);
+      if (!oreLossSheet) {
+        return respond_({ success: true, items: [], values: [], count: 0 }, getCallback_(e));
+      }
+      if (!hasOreLossHeaders_(oreLossSheet)) {
+        throw new Error('Header LAPORAN ORE LOSS tidak sesuai; data lama tidak diubah.');
+      }
+
+      const lastRow = oreLossSheet.getLastRow();
+      if (lastRow <= 1) {
+        return respond_({ success: true, items: [], values: [], count: 0 }, getCallback_(e));
+      }
+
+      const items = oreLossSheet.getRange(2, 1, lastRow - 1, ORE_LOSS_HEADERS.length)
+        .getDisplayValues()
+        .filter(row => row.some(value => String(value || '').trim() !== ''))
+        .map(rowToOreLossItem_);
+      return respond_({ success: true, items, values: items, count: items.length }, getCallback_(e));
+    }
+
     const sheet = getSheet_();
+    if (recordId) {
+      ensureProductionIdColumn_(sheet);
+      const lastRow = sheet.getLastRow();
+      const ids = lastRow > 1
+        ? sheet.getRange(2, PRODUCTION_ID_COLUMN, lastRow - 1, 1).getDisplayValues()
+        : [];
+      const matchCount = ids.filter((row) => String(row[0] || '').trim() === recordId).length;
+      return respond_({
+        success: true,
+        found: matchCount > 0,
+        matchCount,
+        recordId,
+      }, getCallback_(e));
+    }
+
     const lastRow = sheet.getLastRow();
     const lastCol = Math.max(sheet.getLastColumn(), HEADERS.length);
 
@@ -269,6 +391,10 @@ function doPost(e) {
 
     if (type === 'oregetting' || type === 'ore_getting') {
       return saveOreGetting_(payload);
+    }
+
+    if (type === 'oreloss' || type === 'ore_loss') {
+      return saveOreLoss_(payload);
     }
 
     if (payload.values || payload.items) {
@@ -480,6 +606,7 @@ function saveProduction_(payload) {
 
   try {
     const sheet = getSheet_();
+    ensureProductionIdColumn_(sheet);
     const items = Array.isArray(payload.items) ? payload.items : Array.isArray(payload.values) ? payload.values : [];
     const submittedAt = getSubmissionTimestamp_();
 
@@ -489,6 +616,13 @@ function saveProduction_(payload) {
 
     const properties = PropertiesService.getScriptProperties();
     const processed = properties.getProperties();
+    const lastRow = sheet.getLastRow();
+    const existingIds = lastRow > 1
+      ? new Set(sheet.getRange(2, PRODUCTION_ID_COLUMN, lastRow - 1, 1)
+        .getDisplayValues()
+        .map((row) => String(row[0] || '').trim())
+        .filter(Boolean))
+      : new Set();
     const rows = [];
     const keysToMark = {};
     const seenKeys = {};
@@ -504,19 +638,19 @@ function saveProduction_(payload) {
       }
 
       const key = productionIdempotencyKey_(recordId);
-      if (processed[key] || seenKeys[key]) {
+      if (existingIds.has(recordId) || processed[key] || seenKeys[key]) {
         duplicateCount++;
         return;
       }
 
       seenKeys[key] = true;
       keysToMark[key] = '1';
-      rows.push(itemToRow_(item, submittedAt));
+      rows.push([...itemToRow_(item, submittedAt), recordId]);
     });
 
     if (rows.length) {
       const startRow = sheet.getLastRow() + 1;
-      sheet.getRange(startRow, 1, rows.length, HEADERS.length).setValues(rows);
+      sheet.getRange(startRow, 1, rows.length, PRODUCTION_ID_COLUMN).setValues(rows);
       properties.setProperties(keysToMark);
     }
 
@@ -579,14 +713,106 @@ function saveOreGetting_(payload) {
   return respond_({ success: true, message: 'Data Ore Getting berhasil disimpan.', sheet: ORE_GETTING_SHEET_NAME, count: items.length }, '');
 }
 
+function saveOreLoss_(payload) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+
+  try {
+    const sheet = getOreLossSheet_();
+    const items = Array.isArray(payload.items) ? payload.items : Array.isArray(payload.values) ? payload.values : [];
+    if (!items.length) {
+      return respond_({ success: true, message: 'Tidak ada data Ore Loss baru.', sheet: ORE_LOSS_SHEET_NAME, count: 0 }, '');
+    }
+
+    const submittedAt = getSubmissionTimestamp_();
+    const rows = items.map(item => oreLossToRow_(item, submittedAt));
+    const startRow = sheet.getLastRow() + 1;
+    sheet.getRange(startRow, 1, rows.length, ORE_LOSS_HEADERS.length).setValues(rows);
+    return respond_({ success: true, message: 'Laporan Ore Loss berhasil disimpan.', sheet: ORE_LOSS_SHEET_NAME, count: rows.length }, '');
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function oreLossToRow_(item, submittedAt) {
+  if (!item || typeof item !== 'object' || Array.isArray(item)) {
+    throw new Error('Format data Ore Loss tidak valid.');
+  }
+
+  const unitExcavator = String(item.unitExcavator || '').trim();
+  const startLoading = String(item.startLoading || '').trim();
+  const stopLoading = String(item.stopLoading || '').trim();
+  const jumlahBucket = Number(item.jumlahBucket);
+  const blockModel = String(item.blockModel || '').trim();
+  const titikBor = String(item.titikBor || '').trim();
+  const elevasi = String(item.elevasi || '').trim();
+  const ritase = Number(item.ritase);
+  const status = String(item.status || '').trim();
+  const reporterName = String(item.reporterName || '').trim();
+
+  if (
+    !unitExcavator ||
+    !/^\d{2}:\d{2}$/.test(startLoading) ||
+    !/^\d{2}:\d{2}$/.test(stopLoading) ||
+    !Number.isSafeInteger(jumlahBucket) || jumlahBucket < 0 ||
+    !blockModel || !titikBor || !elevasi ||
+    !Number.isSafeInteger(ritase) || ritase < 0 ||
+    !['Close', 'Continue'].includes(status) ||
+    !reporterName
+  ) {
+    throw new Error('Data Ore Loss tidak lengkap atau tidak valid.');
+  }
+
+  return [unitExcavator, startLoading, stopLoading, jumlahBucket, blockModel, titikBor, elevasi, ritase, status, submittedAt, reporterName];
+}
+
 function getSheet_() {
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   let sheet = ss.getSheetByName(SHEET_NAME);
   if (!sheet) {
     sheet = ss.insertSheet(SHEET_NAME, 0);
   }
-  ensureHeaders_(sheet, HEADERS);
+  ensureProductionHeaders_(sheet);
   return sheet;
+}
+
+function ensureProductionHeaders_(sheet) {
+  if (sheet.getLastRow() === 0) {
+    sheet.getRange(1, 1, 1, HEADERS.length).setValues([HEADERS]);
+    return;
+  }
+
+  const current = sheet.getRange(1, 1, 1, HEADERS.length).getDisplayValues()[0];
+  const matches = HEADERS.every((header, index) => (
+    String(current[index] || '').trim().toLowerCase() === header.toLowerCase()
+  ));
+  if (!matches) {
+    throw new Error('Header Production tidak sesuai; data lama tidak diubah.');
+  }
+}
+
+function ensureProductionIdColumn_(sheet) {
+  const maxColumns = sheet.getMaxColumns();
+  if (maxColumns < PRODUCTION_ID_COLUMN) {
+    throw new Error('Lembar Production tidak memiliki kolom ID yang aman; data lama tidak diubah.');
+  }
+
+  const header = String(sheet.getRange(1, PRODUCTION_ID_COLUMN).getDisplayValue() || '').trim();
+  if (header.toLowerCase() === 'id laporan') return;
+  if (header) {
+    throw new Error('Kolom ID Production sudah digunakan; data lama tidak diubah.');
+  }
+
+  const lastRow = sheet.getLastRow();
+  if (lastRow > 1) {
+    const hasExistingValues = sheet.getRange(2, PRODUCTION_ID_COLUMN, lastRow - 1, 1)
+      .getDisplayValues()
+      .some((row) => String(row[0] || '').trim() !== '');
+    if (hasExistingValues) {
+      throw new Error('Kolom ID Production berisi data tanpa header; data lama tidak diubah.');
+    }
+  }
+  sheet.getRange(1, PRODUCTION_ID_COLUMN).setValue('ID Laporan');
 }
 
 function getAttendanceSheet_() {
@@ -607,6 +833,35 @@ function getOreGettingSheet_() {
   }
   ensureOreGettingReporterHeader_(sheet);
   return sheet;
+}
+
+function getOreLossSheet_() {
+  const spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID);
+  let sheet = spreadsheet.getSheetByName(ORE_LOSS_SHEET_NAME);
+
+  if (!sheet) {
+    sheet = spreadsheet.insertSheet(ORE_LOSS_SHEET_NAME, spreadsheet.getNumSheets());
+  }
+
+  if (sheet.getLastRow() === 0) {
+    sheet.getRange(1, 1, 1, ORE_LOSS_HEADERS.length).setValues([ORE_LOSS_HEADERS]);
+    return sheet;
+  }
+
+  if (!hasOreLossHeaders_(sheet)) {
+    throw new Error('Header LAPORAN ORE LOSS tidak sesuai; header dan data lama tidak diubah.');
+  }
+
+  return sheet;
+}
+
+function hasOreLossHeaders_(sheet) {
+  if (!sheet || sheet.getMaxColumns() < ORE_LOSS_HEADERS.length || sheet.getLastRow() === 0) return false;
+
+  const actual = sheet.getRange(1, 1, 1, ORE_LOSS_HEADERS.length).getDisplayValues()[0];
+  return ORE_LOSS_HEADERS.every((header, index) => (
+    String(actual[index] || '').trim().toLowerCase() === header.toLowerCase()
+  ));
 }
 
 function ensureOreGettingReporterHeader_(sheet) {
@@ -751,6 +1006,8 @@ function rowToItem_(row, acuanNiIndex) {
 
   return {
     id: 'gs-' + Utilities.getUuid(),
+    recordId: String(row[PRODUCTION_ID_COLUMN - 1] || '').trim(),
+    syncStatus: String(row[PRODUCTION_ID_COLUMN - 1] || '').trim() ? 'sent' : undefined,
     date: formatDate_(row[0]),
     block: String(row[1] || ''),
     shift: String(row[2] || ''),
@@ -847,6 +1104,48 @@ export function createProductionRecordId() {
   return `production-${globalThis.crypto.randomUUID()}`;
 }
 
+function readProductionMatchCount_(endpoint, recordId) {
+  return new Promise((resolve, reject) => {
+    const callbackName = `__mineTrackProduction_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    const script = document.createElement('script');
+    const timer = window.setTimeout(() => {
+      cleanup();
+      reject(new Error(`Timeout saat memeriksa recordId Production ${recordId}; data tetap pending.`));
+    }, 15000);
+
+    function cleanup() {
+      window.clearTimeout(timer);
+      delete window[callbackName];
+      script.remove();
+    }
+
+    window[callbackName] = (payload) => {
+      cleanup();
+      if (
+        !payload ||
+        payload.success !== true ||
+        payload.recordId !== recordId ||
+        !Number.isSafeInteger(payload.matchCount) ||
+        payload.matchCount < 0 ||
+        payload.found !== (payload.matchCount > 0)
+      ) {
+        reject(new Error(payload?.message || `Respons pemeriksaan recordId Production ${recordId} tidak valid.`));
+        return;
+      }
+      resolve(payload.matchCount);
+    };
+
+    script.onerror = () => {
+      cleanup();
+      reject(new Error(`Google Sheets gagal memeriksa recordId Production ${recordId}; data tetap pending.`));
+    };
+
+    const separator = endpoint.includes('?') ? '&' : '?';
+    script.src = `${endpoint}${separator}recordId=${encodeURIComponent(recordId)}&callback=${encodeURIComponent(callbackName)}&t=${Date.now()}`;
+    document.head.appendChild(script);
+  });
+}
+
 export function withProductionRecordIds(logs, fallbackPrefix = '') {
   if (!Array.isArray(logs)) {
     throw new Error('Data Production harus berupa daftar record.');
@@ -881,20 +1180,38 @@ export async function syncLogsToGoogleSheets(url, logs) {
     throw new Error('Production harus disinkronkan satu record per permintaan.');
   }
 
-  try {
-    const response = await fetch(endpoint, {
-  method: 'POST',
-  headers: {
-    'Content-Type': 'text/plain;charset=utf-8',
-  },
-  body: JSON.stringify({
-    type: 'production',
-    items: identifiedLogs,
-    values: identifiedLogs,
-  }),
-});
+  const record = identifiedLogs[0];
+  const existingCount = await readProductionMatchCount_(endpoint, record.recordId);
+  if (existingCount > 1) {
+    throw new Error(`Production ${record.recordId} ditemukan ${existingCount} kali; data tetap pending.`);
+  }
+  if (existingCount === 1) {
+    return identifiedLogs;
+  }
 
-    const text = await response.text();
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 30000);
+    let response;
+    let text;
+    try {
+      response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'text/plain;charset=utf-8',
+        },
+        body: JSON.stringify({
+          type: 'production',
+          items: identifiedLogs,
+          values: identifiedLogs,
+        }),
+        signal: controller.signal,
+      });
+      text = await response.text();
+    } finally {
+      clearTimeout(timeout);
+    }
+
     const payload = parseJsonResponse_(text);
 
     if (!response.ok) {
@@ -909,13 +1226,20 @@ export async function syncLogsToGoogleSheets(url, logs) {
       throw new Error('Production belum terkonfirmasi tersimpan di Google Sheets. Data tetap disimpan untuk retry.');
     }
 
-    const acceptedCount = Number(payload.count);
-    if (!Number.isFinite(acceptedCount) || acceptedCount <= 0) {
-      throw new Error('Production belum terkonfirmasi tersimpan di Google Sheets. Data tetap disimpan untuk retry.');
+    const matchCount = await readProductionMatchCount_(endpoint, record.recordId);
+    if (matchCount !== 1) {
+      throw new Error(
+        matchCount === 0
+          ? `Production ${record.recordId} belum ditemukan pada read-back; data tetap pending.`
+          : `Production ${record.recordId} ditemukan ${matchCount} kali; data tetap pending.`
+      );
     }
 
     return identifiedLogs;
   } catch (error) {
+    if (error?.name === 'AbortError') {
+      throw new Error('Timeout saat mengirim Production; data tetap pending untuk retry.');
+    }
     const message = String(error?.message || '');
     if (message.includes('Failed to fetch') || message.includes('NetworkError')) {
       throw new Error('Tidak dapat terhubung ke Google Apps Script. Cek URL /exec dan deployment Web App.');
@@ -1295,9 +1619,19 @@ export async function syncProductionAndReadBack(url, logs, readBack = readLogsFr
   for (const record of identifiedLogs) {
     try {
       const [syncedRecord] = await syncLogsToGoogleSheets(url, [record]);
-      const readRecords = await readBack(url);
+      const readRecords = await readBack(url, record);
       if (!Array.isArray(readRecords)) {
         throw new Error('Google Sheets mengembalikan data Production yang tidak valid.');
+      }
+      const confirmedCount = readRecords.filter((item) => (
+        String(item?.recordId || '').trim() === record.recordId
+      )).length;
+      if (confirmedCount !== 1) {
+        throw new Error(
+          confirmedCount === 0
+            ? `Production ${record.recordId} belum ditemukan pada read-back; data tetap pending.`
+            : `Production ${record.recordId} ditemukan ${confirmedCount} kali pada read-back; data tetap pending.`
+        );
       }
 
       syncedLogs.push(syncedRecord);
@@ -1407,6 +1741,45 @@ export function readOreGettingFromGoogleSheets(url) {
 
     const separator = endpoint.includes('?') ? '&' : '?';
     script.src = endpoint + separator + 'type=oregetting&callback=' + encodeURIComponent(callbackName) + '&t=' + Date.now();
+    document.head.appendChild(script);
+  });
+}
+
+export function readOreLossFromGoogleSheets(url) {
+  const endpoint = normalizeUrl_(url);
+  if (!endpoint) return Promise.reject(new Error('URL Google Apps Script belum diisi.'));
+
+  return new Promise((resolve, reject) => {
+    const callbackName = '__mineTrackOreLoss_' + Date.now() + '_' + Math.random().toString(36).slice(2);
+    const script = document.createElement('script');
+    const timer = window.setTimeout(() => {
+      cleanup();
+      reject(new Error('Timeout saat membaca Ore Loss dari Google Sheets.'));
+    }, 15000);
+
+    function cleanup() {
+      window.clearTimeout(timer);
+      delete window[callbackName];
+      script.remove();
+    }
+
+    window[callbackName] = (payload) => {
+      cleanup();
+      if (!payload || payload.success === false) {
+        reject(new Error(payload?.message || 'Google Sheets mengembalikan error Ore Loss.'));
+        return;
+      }
+      const rows = Array.isArray(payload.items) ? payload.items : [];
+      resolve(rows.map(mapOreLossRow).filter(Boolean));
+    };
+
+    script.onerror = () => {
+      cleanup();
+      reject(new Error('Web App tidak bisa diakses untuk membaca Ore Loss.'));
+    };
+
+    const separator = endpoint.includes('?') ? '&' : '?';
+    script.src = endpoint + separator + 'type=oreloss&callback=' + encodeURIComponent(callbackName) + '&t=' + Date.now();
     document.head.appendChild(script);
   });
 }
